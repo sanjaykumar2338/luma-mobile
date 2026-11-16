@@ -14,8 +14,9 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
+  ApiClient({FlutterSecureStorage? storage, http.Client? client}) : _storage = storage ?? const FlutterSecureStorage(), _client = client ?? http.Client();
   final FlutterSecureStorage _storage;
+  final http.Client _client;
 
   Future<Map<String, dynamic>> uploadSermon(String filePath, {String? title}) async {
     final request = http.MultipartRequest('POST', Uri.parse('${AppConfig.apiBaseUrl}/sermons'));
@@ -37,7 +38,8 @@ class ApiClient {
 
   Future<dynamic> requestAny(String path, {String method = 'GET', Map<String, dynamic>? body, bool auth = false, Map<String, String>? query, String? idempotencyKey}) async {
     if (path.contains('/conversation/messages') && body != null && body['content'] != null) {
-      body = {...body, 'question': body['content'], 'client_request_id': '00000000-0000-4000-8000-000000000001'};
+      final requestId = DateTime.now().microsecondsSinceEpoch.toRadixString(16).padLeft(12, '0').substring(0, 12);
+      body = {...body, 'question': body['content'], 'client_request_id': '00000000-0000-4000-8000-$requestId'};
     }
     if (path == '/bible-studies' && method == 'POST' && body != null) {
       body = {...body};
@@ -59,13 +61,20 @@ class ApiClient {
       final token = await _storage.read(key: 'luma_access_token');
       if (token != null) headers['Authorization'] = 'Bearer $token';
     }
-    final response = await switch (method) {
-      'POST' => http.post(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
-      'PATCH' => http.patch(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
-      'PUT' => http.put(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
-      'DELETE' => http.delete(uri, headers: headers),
-      _ => http.get(uri, headers: headers),
-    };
+    late http.Response response;
+    try {
+      response = await switch (method) {
+        'POST' => _client.post(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
+        'PATCH' => _client.patch(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
+        'PUT' => _client.put(uri, headers: headers, body: body == null ? null : jsonEncode(body)),
+        'DELETE' => _client.delete(uri, headers: headers),
+        _ => _client.get(uri, headers: headers),
+      };
+    } on SocketException {
+      throw const ApiException('You appear to be offline. Check your connection and try again.');
+    } on http.ClientException {
+      throw const ApiException('LUMA could not reach the server. Please try again.');
+    }
     final payload = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final map = payload is Map ? payload.cast<String, dynamic>() : <String, dynamic>{};

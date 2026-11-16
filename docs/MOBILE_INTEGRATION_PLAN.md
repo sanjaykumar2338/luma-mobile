@@ -21,10 +21,11 @@ The first feature batch now uses the existing API for:
 
 - Dashboard entitlements, today's devotional, and recent sermons.
 - Sermon pagination, URL/transcript submission, processing refresh, notes, and
-  transcript-grounded Ask LUMA messages.
+  transcript-grounded Ask LUMA messages, plus validated audio/video file upload.
 - Bible translations, books, chapters, passage display, and search.
 - AI Bible study generation/history, devotional history, reading-plan catalog,
-  profile updates, beta feedback, and account settings.
+  enrollment/day completion, profile updates, password changes, beta feedback,
+  and account settings.
 
 The app does not invent response data: list/resource parsing follows the Laravel
 JSON resources and pagination envelopes. Loading, empty, API-error, and retry
@@ -67,10 +68,11 @@ entitlements.
   OpenAI credentials.
 - The existing billing checkout/portal endpoints are web-oriented; they should
   only be opened through a compliant platform flow after product/legal review.
-- Multipart upload client plumbing and the `file_picker` dependency are staged,
-  but the picker button still needs to be wired into the sermon submission UI.
-- Reading-plan catalog is visible; enrollment/progress detail UI remains to be
-  wired to the existing enrollment and day-progress endpoints.
+- Multipart upload uses the Laravel limits: FLAC, MP3, MP4, MPEG, MPGA, M4A,
+  OGG, WAV, or WEBM, with a 25 MB client-side limit matching the current
+  backend configuration.
+- Native notification provider wiring is intentionally pending credentials and
+  a dedicated FCM/APNs device-token endpoint; see `PUSH_NOTIFICATIONS.md`.
 
 ## Next development task
 
