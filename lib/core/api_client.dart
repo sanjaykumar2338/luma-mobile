@@ -16,9 +16,18 @@ class ApiClient {
   ApiClient({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
   final FlutterSecureStorage _storage;
 
-  Future<Map<String, dynamic>> request(String path, {String method = 'GET', Map<String, dynamic>? body, bool auth = false}) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}$path');
+  Future<dynamic> requestAny(String path, {String method = 'GET', Map<String, dynamic>? body, bool auth = false, Map<String, String>? query, String? idempotencyKey}) async {
+    if (path.contains('/conversation/messages') && body != null && body['content'] != null) {
+      body = {...body, 'question': body['content'], 'client_request_id': '00000000-0000-4000-8000-000000000001'};
+    }
+    if (path == '/bible-studies' && method == 'POST' && body != null) {
+      body = {...body};
+      body.remove('reader_reference');
+      body['depth'] = body['depth'] == 'quick' ? 'quick_read' : body['depth'] == 'deep' ? 'go_deeper' : body['depth'];
+    }
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}$path').replace(queryParameters: query);
     final headers = <String, String>{'Accept': 'application/json', 'Content-Type': 'application/json'};
+    if (idempotencyKey != null) headers['Idempotency-Key'] = idempotencyKey;
     if (auth) {
       final token = await _storage.read(key: 'luma_access_token');
       if (token != null) headers['Authorization'] = 'Bearer $token';
@@ -30,10 +39,16 @@ class ApiClient {
       'DELETE' => http.delete(uri, headers: headers),
       _ => http.get(uri, headers: headers),
     };
-    final payload = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body) as Map<String, dynamic>;
+    final payload = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException(payload['message'] as String? ?? 'Something went wrong. Please try again.', statusCode: response.statusCode, fields: (payload['errors'] as Map?)?.cast<String, dynamic>() ?? {});
+      final map = payload is Map ? payload.cast<String, dynamic>() : <String, dynamic>{};
+      throw ApiException(map['message'] as String? ?? 'Something went wrong. Please try again.', statusCode: response.statusCode, fields: (map['errors'] as Map?)?.cast<String, dynamic>() ?? {});
     }
     return payload;
+  }
+
+  Future<Map<String, dynamic>> request(String path, {String method = 'GET', Map<String, dynamic>? body, bool auth = false, Map<String, String>? query, String? idempotencyKey}) async {
+    final result = await requestAny(path, method: method, body: body, auth: auth, query: query, idempotencyKey: idempotencyKey);
+    return result is Map ? result.cast<String, dynamic>() : <String, dynamic>{'data': result};
   }
 }

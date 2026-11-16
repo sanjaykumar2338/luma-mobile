@@ -55,4 +55,12 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> updateProfile(String name, String email) async {
+    final response = await _api.request('/user/profile', method: 'PATCH', auth: true, body: {'name': name, 'email': email});
+    user = User.fromJson((response['data'] as Map).cast<String, dynamic>());
+    notifyListeners();
+  }
+
+  Future<void> changePassword(String current, String next, String confirmation) => _api.request('/user/password', method: 'PUT', auth: true, body: {'current_password': current, 'password': next, 'password_confirmation': confirmation});
 }

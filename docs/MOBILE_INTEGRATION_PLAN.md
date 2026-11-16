@@ -8,12 +8,27 @@ remain in the separate `lumaword` repository. The production API host is
 
 ## Foundation delivered
 
-- Flutter app shell with LUMA colors and the supplied `public/logo-mark.png`.
+- Flutter app shell with LUMA colors and the supplied `assets/logo-mark.png`.
 - Splash, welcome/onboarding, login, registration, forgot-password request,
   persistent bearer-token login, logout, dashboard, bottom navigation, profile,
   loading, and basic empty/feature-preview states.
 - Secure token storage and one centralized API client/error type.
 - Mobile-only Sanctum token endpoints; existing web session auth is unchanged.
+
+## Mobile implementation status
+
+The first feature batch now uses the existing API for:
+
+- Dashboard entitlements, today's devotional, and recent sermons.
+- Sermon pagination, URL/transcript submission, processing refresh, notes, and
+  transcript-grounded Ask LUMA messages.
+- Bible translations, books, chapters, passage display, and search.
+- AI Bible study generation/history, devotional history, reading-plan catalog,
+  profile updates, beta feedback, and account settings.
+
+The app does not invent response data: list/resource parsing follows the Laravel
+JSON resources and pagination envelopes. Loading, empty, API-error, and retry
+states are included in the screens.
 
 ## Reused API surface
 
@@ -38,6 +53,20 @@ entitlements.
   notifications are enabled.
 - Native subscription purchases require an approved Apple/Google billing design
   and server-side receipt validation. No billing mutation was added here.
+
+## Backend/platform gaps
+
+- File submission needs a Flutter multipart/file-picker implementation for the
+  existing `POST /api/v1/sermons` `media` field. No new backend endpoint is
+  required for that path.
+- Native push requires APNs/FCM credentials and a versioned device-token
+  contract; the current `/push-subscriptions` endpoint accepts browser Web Push
+  keys and is intentionally not called by the mobile app.
+- Native subscription purchases require an approved Apple/Google billing flow
+  and server-side receipt validation. The mobile app does not expose Stripe or
+  OpenAI credentials.
+- The existing billing checkout/portal endpoints are web-oriented; they should
+  only be opened through a compliant platform flow after product/legal review.
 
 ## Next development task
 
