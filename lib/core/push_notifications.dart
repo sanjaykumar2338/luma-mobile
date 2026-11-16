@@ -16,6 +16,8 @@ abstract interface class PushNotificationGateway {
 
 class PendingPushNotificationGateway implements PushNotificationGateway {
   const PendingPushNotificationGateway();
-  @override Future<PushRegistration?> register() async => null;
-  @override Future<void> unregister() async {}
+  @override
+  Future<PushRegistration?> register() async => null;
+  @override
+  Future<void> unregister() async {}
 }

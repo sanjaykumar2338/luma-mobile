@@ -6,11 +6,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luma_mobile/core/api_client.dart';
 
 void main() {
-  test('decodes a successful API envelope and forwards query parameters', () async {
+  test('decodes a successful API envelope and forwards query parameters',
+      () async {
     Uri? requested;
     final client = MockClient((request) async {
       requested = request.url;
-      return http.Response(jsonEncode({'data': {'id': 4}}), 200);
+      return http.Response(
+          jsonEncode({
+            'data': {'id': 4}
+          }),
+          200);
     });
     final api = ApiClient(client: client);
 
@@ -21,11 +26,21 @@ void main() {
   });
 
   test('turns server validation errors into ApiException', () async {
-    final api = ApiClient(client: MockClient((_) async => http.Response(
-          jsonEncode({'message': 'Invalid input', 'errors': {'email': ['Invalid email']}}),
-          422,
-        )));
+    final api = ApiClient(
+        client: MockClient((_) async => http.Response(
+              jsonEncode({
+                'message': 'Invalid input',
+                'errors': {
+                  'email': ['Invalid email']
+                }
+              }),
+              422,
+            )));
 
-    expect(() => api.request('/user/profile', method: 'PATCH', body: {'email': 'bad'}), throwsA(isA<ApiException>().having((e) => e.message, 'message', 'Invalid input')));
+    expect(
+        () => api
+            .request('/user/profile', method: 'PATCH', body: {'email': 'bad'}),
+        throwsA(isA<ApiException>()
+            .having((e) => e.message, 'message', 'Invalid input')));
   });
 }

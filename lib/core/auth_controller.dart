@@ -30,26 +30,37 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn(String email, String password) => _authenticate('/mobile/auth/login', {'email': email, 'password': password});
+  Future<void> signIn(String email, String password) => _authenticate(
+      '/mobile/auth/login', {'email': email, 'password': password});
 
-  Future<void> register(String name, String email, String password, String confirmation) => _authenticate('/mobile/auth/register', {
-    'name': name, 'email': email, 'password': password, 'password_confirmation': confirmation,
-  });
+  Future<void> register(
+          String name, String email, String password, String confirmation) =>
+      _authenticate('/mobile/auth/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+        'password_confirmation': confirmation,
+      });
 
   Future<void> _authenticate(String path, Map<String, dynamic> body) async {
     error = null;
-    final response = await _api.request(path, method: 'POST', body: {...body, 'device_name': 'luma-flutter'});
-    await _storage.write(key: 'luma_access_token', value: response['token'] as String);
+    final response = await _api.request(path,
+        method: 'POST', body: {...body, 'device_name': 'luma-flutter'});
+    await _storage.write(
+        key: 'luma_access_token', value: response['token'] as String);
     user = User.fromJson(response['data'] as Map<String, dynamic>);
     notifyListeners();
   }
 
   Future<void> forgotPassword(String email) async {
-    await _api.request('/auth/forgot-password', method: 'POST', body: {'email': email});
+    await _api.request('/auth/forgot-password',
+        method: 'POST', body: {'email': email});
   }
 
   Future<void> signOut() async {
-    try { await _api.request('/mobile/auth/logout', method: 'POST', auth: true); } finally {
+    try {
+      await _api.request('/mobile/auth/logout', method: 'POST', auth: true);
+    } finally {
       await _storage.delete(key: 'luma_access_token');
       user = null;
       notifyListeners();
@@ -57,10 +68,17 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> updateProfile(String name, String email) async {
-    final response = await _api.request('/user/profile', method: 'PATCH', auth: true, body: {'name': name, 'email': email});
+    final response = await _api.request('/user/profile',
+        method: 'PATCH', auth: true, body: {'name': name, 'email': email});
     user = User.fromJson((response['data'] as Map).cast<String, dynamic>());
     notifyListeners();
   }
 
-  Future<void> changePassword(String current, String next, String confirmation) => _api.request('/user/password', method: 'PUT', auth: true, body: {'current_password': current, 'password': next, 'password_confirmation': confirmation});
+  Future<void> changePassword(
+          String current, String next, String confirmation) =>
+      _api.request('/user/password', method: 'PUT', auth: true, body: {
+        'current_password': current,
+        'password': next,
+        'password_confirmation': confirmation
+      });
 }
