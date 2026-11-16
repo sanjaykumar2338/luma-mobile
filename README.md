@@ -20,6 +20,19 @@ Tokens are stored with
 client. The current app intentionally shows membership status without starting
 a native purchase flow.
 
+## Current implementation status
+
+The app includes authenticated navigation, dashboard data, sermon library
+submission/list/detail/Ask LUMA flows, Bible reading/search, AI Bible study,
+devotionals, reading-plan catalog, profile updates, feedback, loading states,
+empty states, and API error handling. See `docs/MOBILE_INTEGRATION_PLAN.md` for
+the exact backend/platform gaps.
+
+The local machine used for this repository currently has no Flutter, Dart,
+Java, Android SDK, or `adb` executable. Dependency installation, analyzer,
+tests, platform generation, and APK builds must be run after Flutter tooling is
+installed.
+
 ## Repository layout
 
 This is the standalone Flutter repository at

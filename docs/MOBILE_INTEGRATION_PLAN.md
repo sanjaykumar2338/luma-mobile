@@ -67,6 +67,10 @@ entitlements.
   OpenAI credentials.
 - The existing billing checkout/portal endpoints are web-oriented; they should
   only be opened through a compliant platform flow after product/legal review.
+- Multipart upload client plumbing and the `file_picker` dependency are staged,
+  but the picker button still needs to be wired into the sermon submission UI.
+- Reading-plan catalog is visible; enrollment/progress detail UI remains to be
+  wired to the existing enrollment and day-progress endpoints.
 
 ## Next development task
 
