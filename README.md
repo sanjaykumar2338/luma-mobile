@@ -10,11 +10,13 @@ Install Flutter 3.50+ and run:
 flutter pub get
 flutter analyze
 flutter test
-flutter run --dart-define=LUMA_API_BASE_URL=https://lumaword.app/api/v1
+flutter run --dart-define=LUMA_API_ORIGIN=https://lumaword.app/
 ```
 
-The production API base URL is `https://lumaword.app/api/v1`. It is configurable
-at build time with `LUMA_API_BASE_URL` for development or staging environments.
+The production API origin is `https://lumaword.app/`; the versioned API base
+used by the app is `https://lumaword.app/api/v1`. The origin is configurable at
+build time with `LUMA_API_ORIGIN`, or the complete API base can be overridden
+with `LUMA_API_BASE_URL` for development or staging environments.
 Tokens are stored with
 `flutter_secure_storage`; no Stripe or OpenAI credentials are shipped in the
 client. The current app intentionally shows membership status without starting
