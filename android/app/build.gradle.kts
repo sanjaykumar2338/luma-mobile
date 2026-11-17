@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.example.luma_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker's current Android lifecycle dependency requires API 36.
+    // This is compile-time only; target/min SDK and the temporary app ID stay
+    // unchanged until the release identifiers are approved.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

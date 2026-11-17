@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'core/api_client.dart';
 import 'core/auth_controller.dart';
@@ -1900,6 +1901,18 @@ class _AccountSettingsState extends State<AccountSettings> {
                 context,
                 MaterialPageRoute(
                     builder: (_) => PasswordChangeScreen(auth: widget.auth)))),
+        ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: const Text('Privacy policy'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: () => launchUrl(Uri.parse(AppConfig.privacyPolicyUrl),
+                mode: LaunchMode.externalApplication)),
+        ListTile(
+            leading: const Icon(Icons.description_outlined),
+            title: const Text('Terms of service'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: () => launchUrl(Uri.parse(AppConfig.termsUrl),
+                mode: LaunchMode.externalApplication)),
         const SizedBox(height: 20),
         const Text('Membership',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),

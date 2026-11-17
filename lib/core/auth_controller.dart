@@ -25,7 +25,9 @@ class AuthController extends ChangeNotifier {
       }
     } on ApiException catch (exception) {
       error = exception;
-      await _storage.delete(key: 'luma_access_token');
+      if (exception.statusCode == 401 || exception.statusCode == 403) {
+        await _storage.delete(key: 'luma_access_token');
+      }
     } finally {
       loading = false;
       notifyListeners();

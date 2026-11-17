@@ -31,4 +31,6 @@ class AppConfig {
     'LUMA_ANNUAL_PRODUCT_ID',
     defaultValue: '',
   );
+  static const privacyPolicyUrl = 'https://lumaword.app/privacy';
+  static const termsUrl = 'https://lumaword.app/terms';
 }

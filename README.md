@@ -45,6 +45,6 @@ separate `lumaword` repository and is not part of this project.
 
 ## Development identifiers
 
-The platform shells should use a temporary development identifier such as
-`com.example.lumaMobile` until the owner supplies the final Android application
-ID and iOS bundle identifier. Do not ship that placeholder to either store.
+The proposed final Android application ID and iOS bundle identifier are
+`app.lumaword.mobile`. They are not applied yet; the platform shells retain
+temporary Flutter-generated identifiers until the owner approves the change.
