@@ -1,11 +1,18 @@
+// Flutter 3.50 currently reports the Material library import as deprecated
+// while the app remains on the stable Material 3 API surface.
+// ignore_for_file: deprecated_member_use
+
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/api_client.dart';
 import 'core/auth_controller.dart';
+import 'core/config.dart';
 import 'core/models.dart';
+import 'core/push_notifications.dart';
 
 const ink = Color(0xFF171717);
 const cream = Color(0xFFF5F1E8);
@@ -47,9 +54,33 @@ class LumaApp extends StatefulWidget {
 class _LumaAppState extends State<LumaApp> {
   late final ApiClient api = ApiClient();
   late final AuthController auth = AuthController(api: api)..restore();
+  PushNotificationGateway? push;
+
+  @override
+  void initState() {
+    super.initState();
+    auth.addListener(_authChanged);
+    configureFirebaseBackgroundHandler();
+    _authChanged();
+  }
+
+  void _authChanged() {
+    if (!auth.isAuthenticated || push != null || !AppConfig.firebaseEnabled) {
+      return;
+    }
+    final gateway = FirebasePushNotificationGateway(api: api);
+    push = gateway;
+    gateway.register().catchError((_) {
+      // Notification delivery is optional; account access must not depend on
+      // provider availability or a missing Firebase configuration.
+      return null;
+    });
+  }
 
   @override
   void dispose() {
+    auth.removeListener(_authChanged);
+    push?.dispose();
     auth.dispose();
     super.dispose();
   }
@@ -396,10 +427,15 @@ class _AppShellState extends State<AppShell> {
 
 class PageFrame extends StatelessWidget {
   const PageFrame(
-      {required this.title, required this.child, this.action, super.key});
+      {required this.title,
+      required this.child,
+      this.action,
+      this.onRefresh,
+      super.key});
   final String title;
   final Widget child;
   final Widget? action;
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -409,7 +445,7 @@ class PageFrame extends StatelessWidget {
             actions: action == null ? null : [action!]),
         body: SafeArea(
             child: RefreshIndicator(
-                onRefresh: () async {},
+                onRefresh: onRefresh ?? () async {},
                 child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -481,18 +517,20 @@ class _DashboardState extends State<Dashboard> {
       setState(() {
         entitlements = Entitlements.fromJson(
             (entitlementData as Map).cast<String, dynamic>());
-        if (devotionalData is Map)
+        if (devotionalData is Map) {
           devotional =
               Devotional.fromJson(devotionalData.cast<String, dynamic>());
+        }
         sermons = mapsOf(results[2]).map(Sermon.fromJson).toList();
         busy = false;
       });
     } catch (value) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           error = value.toString();
           busy = false;
         });
+      }
     }
   }
 
@@ -516,6 +554,7 @@ class _DashboardState extends State<Dashboard> {
     return PageFrame(
       title: 'Good day, $firstName',
       action: IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+      onRefresh: load,
       child: busy
           ? const Loading()
           : error != null
@@ -622,18 +661,20 @@ class _SermonLibraryState extends State<SermonLibrary> {
     try {
       final response = await widget.api.request('/sermons',
           auth: true, query: {'page': '$page', 'per_page': '12'});
-      if (mounted)
+      if (mounted) {
         setState(() {
           sermons = mapsOf(response).map(Sermon.fromJson).toList();
           busy = false;
           error = null;
         });
+      }
     } catch (value) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           error = value.toString();
           busy = false;
         });
+      }
     }
   }
 
@@ -661,6 +702,7 @@ class _SermonLibraryState extends State<SermonLibrary> {
                       builder: (_) => SubmitSermon(api: widget.api)))
               .then((_) => load()),
           icon: const Icon(Icons.add)),
+      onRefresh: load,
       child: busy
           ? const Loading()
           : error != null
@@ -739,9 +781,10 @@ class _SubmitSermonState extends State<SubmitSermon> {
     final file = result?.files.single;
     if (file == null || file.path == null) return;
     if (file.size > maxBytes) {
-      if (mounted)
+      if (mounted) {
         showError(
             context, const ApiException('Choose a file smaller than 25 MB.'));
+      }
       return;
     }
     setState(() {
@@ -873,9 +916,10 @@ class _SermonDetailState extends State<SermonDetail> {
           auth: true,
           body: {'content': text});
       final data = dataOf(response);
-      if (data is Map && data['answer'] is Map)
+      if (data is Map && data['answer'] is Map) {
         setState(() => messages.add(SermonMessage.fromJson(
             (data['answer'] as Map).cast<String, dynamic>())));
+      }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     }
@@ -970,11 +1014,12 @@ class _BibleReaderState extends State<BibleReader> {
     try {
       final response = await widget.api.request('/bible/books',
           auth: true, query: {'translation': translation});
-      if (mounted)
+      if (mounted) {
         setState(() {
           books = mapsOf(response).map(BibleBook.fromJson).toList();
           busy = false;
         });
+      }
     } catch (value) {
       if (mounted) {
         setState(() => busy = false);
@@ -991,12 +1036,13 @@ class _BibleReaderState extends State<BibleReader> {
           '/bible/${book!.slug}/chapters/$chapter',
           auth: true,
           query: {'translation': translation});
-      if (mounted)
+      if (mounted) {
         setState(() {
           passage = BiblePassage.fromJson(
               (dataOf(response) as Map).cast<String, dynamic>());
           busy = false;
         });
+      }
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => busy = false);
@@ -1019,7 +1065,34 @@ class _BibleReaderState extends State<BibleReader> {
               children: mapsOf(response)
                   .map((item) => ListTile(
                       title: Text('${item['reference'] ?? ''}'),
-                      subtitle: Text('${item['text'] ?? ''}')))
+                      subtitle: Text('${item['text'] ?? ''}'),
+                      trailing: Wrap(children: [
+                        IconButton(
+                            tooltip: 'Copy verse',
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(
+                                  text:
+                                      '${item['reference'] ?? ''}\n${item['text'] ?? ''}'));
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Verse copied')));
+                            },
+                            icon: const Icon(Icons.copy_outlined)),
+                        IconButton(
+                            tooltip: 'Study this passage',
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => StudyHub(
+                                          api: widget.api,
+                                          initialPassage:
+                                              '${item['reference'] ?? ''}')));
+                            },
+                            icon: const Icon(Icons.auto_awesome_outlined))
+                      ])))
                   .toList()));
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
@@ -1031,9 +1104,29 @@ class _BibleReaderState extends State<BibleReader> {
   Widget build(BuildContext context) => PageFrame(
         title: 'Bible reader',
         action: IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        onRefresh: load,
         child: busy && books.isEmpty
             ? const Loading()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                DropdownButtonFormField<String>(
+                    value: translation,
+                    decoration: const InputDecoration(labelText: 'Translation'),
+                    items: const [
+                      DropdownMenuItem(value: 'WEB', child: Text('WEB')),
+                      DropdownMenuItem(value: 'KJV', child: Text('KJV')),
+                      DropdownMenuItem(value: 'ASV', child: Text('ASV')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        translation = value;
+                        book = null;
+                        passage = null;
+                        busy = true;
+                      });
+                      load();
+                    }),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<BibleBook>(
                     value: book,
                     decoration: const InputDecoration(labelText: 'Book'),
@@ -1084,8 +1177,9 @@ class _BibleReaderState extends State<BibleReader> {
 }
 
 class StudyHub extends StatefulWidget {
-  const StudyHub({required this.api, super.key});
+  const StudyHub({required this.api, this.initialPassage, super.key});
   final ApiClient api;
+  final String? initialPassage;
   @override
   State<StudyHub> createState() => _StudyHubState();
 }
@@ -1093,7 +1187,10 @@ class StudyHub extends StatefulWidget {
 class _StudyHubState extends State<StudyHub> {
   bool busy = true;
   bool generating = false;
-  final passage = TextEditingController(text: 'John 3:16');
+  late final passage = TextEditingController(
+      text: widget.initialPassage?.isNotEmpty == true
+          ? widget.initialPassage
+          : 'John 3:16');
   String depth = 'quick_read';
   List<BibleStudy> studies = [];
   @override
@@ -1111,11 +1208,12 @@ class _StudyHubState extends State<StudyHub> {
   Future<void> load() async {
     try {
       final response = await widget.api.request('/bible-studies', auth: true);
-      if (mounted)
+      if (mounted) {
         setState(() {
           studies = mapsOf(response).map(BibleStudy.fromJson).toList();
           busy = false;
         });
+      }
     } catch (value) {
       if (mounted) {
         setState(() => busy = false);
@@ -1133,12 +1231,13 @@ class _StudyHubState extends State<StudyHub> {
           body: {'reader_reference': passage.text.trim(), 'depth': depth},
           idempotencyKey: 'mobile-${DateTime.now().microsecondsSinceEpoch}');
       final data = dataOf(response);
-      if (mounted && data is Map)
+      if (mounted && data is Map) {
         Navigator.push(
             context,
             MaterialPageRoute(
                 builder: (_) => StudyDetail(
                     study: BibleStudy.fromJson(data.cast<String, dynamic>()))));
+      }
       await load();
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
@@ -1150,6 +1249,7 @@ class _StudyHubState extends State<StudyHub> {
   @override
   Widget build(BuildContext context) => PageFrame(
       title: 'AI Bible study',
+      onRefresh: load,
       child: busy
           ? const Loading()
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1259,13 +1359,15 @@ class _DevotionalsState extends State<Devotionals> {
         widget.api.request('/devotionals', auth: true)
       ]);
       final todayData = dataOf(results[0]);
-      if (mounted)
+      if (mounted) {
         setState(() {
-          if (todayData is Map)
+          if (todayData is Map) {
             today = Devotional.fromJson(todayData.cast<String, dynamic>());
+          }
           history = mapsOf(results[1]).map(Devotional.fromJson).toList();
           busy = false;
         });
+      }
     } catch (value) {
       if (mounted) {
         setState(() => busy = false);
@@ -1277,6 +1379,7 @@ class _DevotionalsState extends State<Devotionals> {
   @override
   Widget build(BuildContext context) => PageFrame(
       title: 'Daily devotionals',
+      onRefresh: load,
       child: busy
           ? const Loading()
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1342,11 +1445,12 @@ class _ReadingPlansState extends State<ReadingPlans> {
   Future<void> load() async {
     try {
       final response = await widget.api.request('/reading-plans', auth: true);
-      if (mounted)
+      if (mounted) {
         setState(() {
           plans = mapsOf(response).map(ReadingPlan.fromJson).toList();
           busy = false;
         });
+      }
     } catch (value) {
       if (mounted) {
         setState(() => busy = false);
@@ -1371,6 +1475,7 @@ class _ReadingPlansState extends State<ReadingPlans> {
         .toList();
     return PageFrame(
         title: 'Reading plans',
+        onRefresh: load,
         child: busy
             ? const Loading()
             : plans.isEmpty
@@ -1423,13 +1528,15 @@ class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
           method: 'PUT',
           auth: true,
           body: {'completed': value});
-      if (mounted)
+      if (mounted) {
         setState(() {
-          if (value)
+          if (value) {
             completed.add(dayId);
-          else
+          } else {
             completed.remove(dayId);
+          }
         });
+      }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     }
@@ -1485,9 +1592,10 @@ class _AccountSettingsState extends State<AccountSettings> {
     setState(() => busy = true);
     try {
       await widget.auth.updateProfile(name.text.trim(), email.text.trim());
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Profile updated')));
+      }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     } finally {
@@ -1501,9 +1609,10 @@ class _AccountSettingsState extends State<AccountSettings> {
       await widget.api.request('/beta-feedback',
           method: 'POST', auth: true, body: {'message': feedback.text.trim()});
       feedback.clear();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Thank you for the feedback.')));
+      }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     }
@@ -1609,13 +1718,17 @@ class _PasswordChangeState extends State<PasswordChangeScreen> {
               controller: controller,
               obscureText: true,
               validator: (value) {
-                if (value == null || value.isEmpty)
+                if (value == null || value.isEmpty) {
                   return 'Enter your ${label.toLowerCase()}';
+                }
                 if (!confirmationField &&
                     label == 'New password' &&
-                    value.length < 8) return 'Use at least 8 characters';
-                if (confirmationField && value != next.text)
+                    value.length < 8) {
+                  return 'Use at least 8 characters';
+                }
+                if (confirmationField && value != next.text) {
                   return 'Passwords do not match';
+                }
                 return null;
               },
               decoration: InputDecoration(labelText: label)));

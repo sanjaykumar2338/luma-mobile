@@ -43,4 +43,14 @@ void main() {
         throwsA(isA<ApiException>()
             .having((e) => e.message, 'message', 'Invalid input')));
   });
+
+  test('reports malformed successful responses as an API error', () async {
+    final api = ApiClient(
+        client: MockClient((_) async => http.Response('not-json', 200)));
+
+    expect(
+        () => api.request('/user'),
+        throwsA(isA<ApiException>().having(
+            (e) => e.message, 'message', contains('invalid response'))));
+  });
 }

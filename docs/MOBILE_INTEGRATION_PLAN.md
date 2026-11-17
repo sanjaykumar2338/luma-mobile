@@ -48,18 +48,17 @@ entitlements.
 - Added `POST /api/v1/mobile/auth/login` and `POST /api/v1/mobile/auth/register`
   returning a personal-access token plus the user resource.
 - Added `POST /api/v1/mobile/auth/logout` to revoke the current token.
-- Native push provider registration is still needed. The existing
-  `/push-subscriptions` contract stores browser Web Push keys; APNs/FCM device
-  tokens need a separate versioned contract and server gateway before native
-  notifications are enabled.
-- Native subscription purchases require an approved Apple/Google billing design
-  and server-side receipt validation. No billing mutation was added here.
+- Native push lifecycle and token-refresh code is present but disabled by
+  default. Credentials and the separate device-token contract are still needed
+  before enabling it.
+- Native subscription lifecycle code is present but disabled by default. Store
+  products and server-side receipt validation are still needed before enabling
+  it.
 
 ## Backend/platform gaps
 
-- File submission needs a Flutter multipart/file-picker implementation for the
-  existing `POST /api/v1/sermons` `media` field. No new backend endpoint is
-  required for that path.
+- File submission uses the existing `POST /api/v1/sermons` `media` field; no
+  new backend endpoint is required for that path.
 - Native push requires APNs/FCM credentials and a versioned device-token
   contract; the current `/push-subscriptions` endpoint accepts browser Web Push
   keys and is intentionally not called by the mobile app.
@@ -73,6 +72,8 @@ entitlements.
   backend configuration.
 - Native notification provider wiring is intentionally pending credentials and
   a dedicated FCM/APNs device-token endpoint; see `PUSH_NOTIFICATIONS.md`.
+- Exact proposed mobile-only contracts and unresolved backend questions are in
+  `BACKEND_REQUIREMENTS.md`.
 
 ## Next development task
 

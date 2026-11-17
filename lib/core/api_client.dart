@@ -29,8 +29,9 @@ class ApiClient {
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields['source_type'] = 'upload';
     request.fields['auto_process'] = 'true';
-    if (title != null && title.trim().isNotEmpty)
+    if (title != null && title.trim().isNotEmpty) {
       request.fields['title'] = title.trim();
+    }
     request.files.add(await http.MultipartFile.fromPath('media', filePath));
     final response = await request.send();
     final payload = response.statusCode == 204
@@ -121,8 +122,17 @@ class ApiClient {
       throw const ApiException(
           'LUMA could not reach the server. Please try again.');
     }
-    final payload =
-        response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+    dynamic payload = <String, dynamic>{};
+    if (response.body.isNotEmpty) {
+      try {
+        payload = jsonDecode(response.body);
+      } on FormatException {
+        throw ApiException(
+          'The server returned an invalid response. Please try again.',
+          statusCode: response.statusCode,
+        );
+      }
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final map = payload is Map
           ? payload.cast<String, dynamic>()
