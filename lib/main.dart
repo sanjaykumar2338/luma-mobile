@@ -77,7 +77,9 @@ class _LumaAppState extends State<LumaApp> {
       return;
     }
     final gateway = FirebasePushNotificationGateway(
-        api: api, onMessageTap: _handleNotificationTap);
+        api: api,
+        onMessage: _handleForegroundNotification,
+        onMessageTap: _handleNotificationTap);
     push = gateway;
     gateway.register().catchError((_) {
       // Notification delivery is optional; account access must not depend on
@@ -107,6 +109,29 @@ class _LumaAppState extends State<LumaApp> {
         if (context != null && context.mounted) showError(context, error);
       }
     }
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+    if (route.startsWith('/devotionals/')) {
+      navigator.push(MaterialPageRoute(builder: (_) => Devotionals(api: api)));
+    } else if (route.startsWith('/reading-plans/')) {
+      navigator.push(MaterialPageRoute(builder: (_) => ReadingPlans(api: api)));
+    } else if (route == '/entitlements') {
+      navigator.push(MaterialPageRoute(
+          builder: (_) => AccountSettings(auth: auth, api: api)));
+    }
+  }
+
+  void _handleForegroundNotification(RemoteMessage message) {
+    final context = navigatorKey.currentContext;
+    final notification = message.notification;
+    if (context == null || !context.mounted || notification == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(notification.title ?? notification.body ?? 'LUMA update'),
+        action: message.data['route'] == null
+            ? null
+            : SnackBarAction(
+                label: 'Open',
+                onPressed: () => _handleNotificationTap(message))));
   }
 
   @override

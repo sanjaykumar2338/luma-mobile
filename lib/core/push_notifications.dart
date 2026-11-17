@@ -36,8 +36,10 @@ abstract interface class PushNotificationGateway {
 /// FCM lifecycle adapter. It remains inert until LUMA_FIREBASE_ENABLED is
 /// true and a server token path is supplied at build time.
 class FirebasePushNotificationGateway implements PushNotificationGateway {
-  FirebasePushNotificationGateway({required this.api, this.onMessageTap});
+  FirebasePushNotificationGateway(
+      {required this.api, this.onMessage, this.onMessageTap});
   final ApiClient api;
+  final void Function(RemoteMessage message)? onMessage;
   final void Function(RemoteMessage message)? onMessageTap;
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
@@ -55,7 +57,9 @@ class FirebasePushNotificationGateway implements PushNotificationGateway {
     // ignore: deprecated_member_use
     final token = await messaging.getToken();
     _token = token;
-    _messageSubscription ??= FirebaseMessaging.onMessage.listen((message) {});
+    _messageSubscription ??= FirebaseMessaging.onMessage.listen((message) {
+      onMessage?.call(message);
+    });
     _openedSubscription ??=
         FirebaseMessaging.onMessageOpenedApp.listen((message) {
       onMessageTap?.call(message);
