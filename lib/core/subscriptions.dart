@@ -106,12 +106,18 @@ class SubscriptionManager {
       onStatus?.call(const SubscriptionStatus(SubscriptionState.disabled));
       return;
     }
+    final source = purchase.verificationData.source.toLowerCase();
+    final store = source.contains('google') || source.contains('play')
+        ? 'play_store'
+        : source.contains('apple') || source.contains('app')
+            ? 'app_store'
+            : purchase.verificationData.source;
     await api.request(
       AppConfig.purchaseVerificationPath,
       method: 'POST',
       auth: true,
       body: {
-        'store': purchase.verificationData.source,
+        'store': store,
         'product_id': purchase.productID,
         'transaction_id': purchase.purchaseID,
         'verification_data': purchase.verificationData.serverVerificationData,
