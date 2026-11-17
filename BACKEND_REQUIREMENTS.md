@@ -34,11 +34,10 @@ token unless noted otherwise:
 
 All non-2xx responses should be JSON with `message` and optional `errors`.
 
-## Required native device-token contract
+## Native device-token contract
 
-The client is prepared to use a path supplied through
-`LUMA_DEVICE_TOKEN_PATH`; it is intentionally empty by default. Confirm the
-final path before enabling the build. Recommended contract:
+The client uses the finalized path `/mobile/device-tokens` (or an equivalent
+build override) and remains disabled until Firebase credentials are configured.
 
 `POST /mobile/device-tokens` (authenticated)
 
@@ -62,11 +61,10 @@ exposing provider credentials to the app. Define payload fields for `type`,
 `title`, `body`, and optional `route`/`route_arguments`; document each route
 the app can open from a notification tap.
 
-## Required native subscription verification contract
+## Native subscription verification contract
 
-The client is prepared to use a path supplied through
-`LUMA_PURCHASE_VERIFICATION_PATH`; it is intentionally empty by default.
-Recommended path: `POST /mobile/purchases/verify` (authenticated).
+The client uses `POST /mobile/purchases/verify` (authenticated) and remains
+disabled until store credentials and the billing enable flag are configured.
 
 ```json
 {
@@ -86,17 +84,18 @@ the existing entitlement source of truth.
 
 ## Account deletion and legal links
 
-Confirm an authenticated `DELETE /user` (or documented equivalent) with a
-non-reversible confirmation requirement and the expected response. Until that
-contract exists, the app must not present a deletion control. Provide canonical
-HTTPS URLs for the privacy policy and terms of service before store review.
+The finalized contract is authenticated `DELETE /user` with
+`{"confirmation":"DELETE"}`. It returns `200` with
+`{"message":"Account permanently deleted."}`. The client now requires the
+user to type `DELETE` before sending it. Provide canonical HTTPS URLs for the
+privacy policy and terms of service before store review.
 
 ## Contract validation checklist
 
 - Confirm exact response envelopes and pagination metadata for every resource.
-- Confirm sermon edit, retry, and delete operations, if supported; the mobile
-  client must not guess these routes.
+- Sermon edit, retry, and delete use the finalized PATCH/process/DELETE routes
+  documented above and are now integrated by the mobile client.
 - Confirm AI study mode values beyond `quick_read` and `go_deeper`.
-- Confirm notification preference read/write endpoints and whether they are
-  user-level or device-level.
+- Notification preferences are user-level and use `GET|PUT
+  /mobile/notification-preferences`.
 - Confirm entitlement/quota fields and the 402/403 response shape for limits.

@@ -77,7 +77,6 @@ class FirebasePushNotificationGateway implements PushNotificationGateway {
   }
 
   Future<void> _sendToken(String token) async {
-    if (AppConfig.deviceTokenPath.isEmpty) return;
     await api.request(
       AppConfig.deviceTokenPath,
       method: 'POST',
@@ -93,7 +92,7 @@ class FirebasePushNotificationGateway implements PushNotificationGateway {
   @override
   Future<void> unregister() async {
     final token = _token;
-    if (token == null || AppConfig.deviceTokenPath.isEmpty) return;
+    if (token == null) return;
     await api.request(
       AppConfig.deviceTokenPath,
       method: 'DELETE',

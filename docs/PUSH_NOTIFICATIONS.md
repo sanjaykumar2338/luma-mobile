@@ -2,10 +2,9 @@
 
 The mobile app now has a Firebase Messaging lifecycle adapter in
 `lib/core/push_notifications.dart`. It remains disabled by default and does
-not register a token until platform providers and the server contract are
-ready. Foreground messages are received by the adapter, background messages
-use the annotated top-level handler, and notification taps are forwarded to
-the app callback.
+not register a token until Firebase credentials are configured. Foreground
+messages are received by the adapter, background messages use the annotated
+top-level handler, and notification taps are forwarded to the app callback.
 
 Required before implementation:
 
@@ -13,10 +12,9 @@ Required before implementation:
   notification permission handling, and a release signing setup.
 - iOS: Apple Developer push capability, APNs key/certificate, entitlements,
   provisioning profiles, and notification permission handling.
-- Laravel: a versioned authenticated device-token endpoint accepting provider,
-  token, platform, app version, and installation identity, plus revoke/update
-  semantics. The existing browser Web Push `/push-subscriptions` contract must
-  not be reused for FCM/APNs tokens.
+- Laravel: the finalized authenticated `/mobile/device-tokens` endpoint is
+  integrated. The existing browser Web Push `/push-subscriptions` contract is
+  not reused for FCM/APNs tokens.
 
 Enable only after setup with build defines similar to:
 

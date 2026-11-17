@@ -17,11 +17,11 @@ class AppConfig {
   );
   static const deviceTokenPath = String.fromEnvironment(
     'LUMA_DEVICE_TOKEN_PATH',
-    defaultValue: '',
+    defaultValue: '/mobile/device-tokens',
   );
   static const purchaseVerificationPath = String.fromEnvironment(
     'LUMA_PURCHASE_VERIFICATION_PATH',
-    defaultValue: '',
+    defaultValue: '/mobile/purchases/verify',
   );
   static const monthlyProductId = String.fromEnvironment(
     'LUMA_MONTHLY_PRODUCT_ID',

@@ -53,4 +53,17 @@ void main() {
         throwsA(isA<ApiException>().having(
             (e) => e.message, 'message', contains('invalid response'))));
   });
+
+  test('sends JSON bodies with DELETE requests', () async {
+    String? body;
+    final api = ApiClient(client: MockClient((request) async {
+      body = request.body;
+      return http.Response(
+          jsonEncode({'message': 'Account permanently deleted.'}), 200);
+    }));
+
+    await api
+        .request('/user', method: 'DELETE', body: {'confirmation': 'DELETE'});
+    expect(body, jsonEncode({'confirmation': 'DELETE'}));
+  });
 }

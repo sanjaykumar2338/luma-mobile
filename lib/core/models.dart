@@ -51,6 +51,34 @@ class Entitlements {
       );
 }
 
+class NotificationPreferences {
+  const NotificationPreferences({
+    this.enabled = true,
+    this.sermonProcessing = true,
+    this.devotionalReminders = true,
+    this.subscriptionUpdates = true,
+  });
+  final bool enabled;
+  final bool sermonProcessing;
+  final bool devotionalReminders;
+  final bool subscriptionUpdates;
+
+  factory NotificationPreferences.fromJson(Map<String, dynamic> json) =>
+      NotificationPreferences(
+        enabled: json['enabled'] as bool? ?? true,
+        sermonProcessing: json['sermon_processing'] as bool? ?? true,
+        devotionalReminders: json['devotional_reminders'] as bool? ?? true,
+        subscriptionUpdates: json['subscription_updates'] as bool? ?? true,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'sermon_processing': sermonProcessing,
+        'devotional_reminders': devotionalReminders,
+        'subscription_updates': subscriptionUpdates,
+      };
+}
+
 String textValue(dynamic value) => value?.toString() ?? '';
 List<dynamic> listValue(dynamic value) => value is List ? value : const [];
 

@@ -5,6 +5,7 @@
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -13,6 +14,7 @@ import 'core/auth_controller.dart';
 import 'core/config.dart';
 import 'core/models.dart';
 import 'core/push_notifications.dart';
+import 'core/subscriptions.dart';
 
 const ink = Color(0xFF171717);
 const cream = Color(0xFFF5F1E8);
@@ -52,9 +54,15 @@ class LumaApp extends StatefulWidget {
 }
 
 class _LumaAppState extends State<LumaApp> {
+  final navigatorKey = GlobalKey<NavigatorState>();
   late final ApiClient api = ApiClient();
-  late final AuthController auth = AuthController(api: api)..restore();
   PushNotificationGateway? push;
+  late final AuthController auth = AuthController(
+      api: api,
+      beforeSignOut: () async {
+        await push?.unregister();
+      })
+    ..restore();
 
   @override
   void initState() {
@@ -68,13 +76,37 @@ class _LumaAppState extends State<LumaApp> {
     if (!auth.isAuthenticated || push != null || !AppConfig.firebaseEnabled) {
       return;
     }
-    final gateway = FirebasePushNotificationGateway(api: api);
+    final gateway = FirebasePushNotificationGateway(
+        api: api, onMessageTap: _handleNotificationTap);
     push = gateway;
     gateway.register().catchError((_) {
       // Notification delivery is optional; account access must not depend on
       // provider availability or a missing Firebase configuration.
       return null;
     });
+  }
+
+  Future<void> _handleNotificationTap(RemoteMessage message) async {
+    final route = message.data['route']?.toString();
+    if (route == null) return;
+    final match = RegExp(r'^/sermons/(\d+)$').firstMatch(route);
+    if (match != null) {
+      try {
+        final response =
+            await api.request('/sermons/${match.group(1)}', auth: true);
+        final data = dataOf(response);
+        if (data is Map && navigatorKey.currentState != null) {
+          navigatorKey.currentState!.push(MaterialPageRoute(
+              builder: (_) => SermonDetail(
+                  api: api,
+                  sermon: Sermon.fromJson(data.cast<String, dynamic>()))));
+        }
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        final context = navigatorKey.currentContext;
+        if (context != null && context.mounted) showError(context, error);
+      }
+    }
   }
 
   @override
@@ -90,6 +122,7 @@ class _LumaAppState extends State<LumaApp> {
     return AnimatedBuilder(
       animation: auth,
       builder: (context, _) => MaterialApp(
+        navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'LUMA',
         theme: ThemeData(
@@ -882,11 +915,13 @@ class SermonDetail extends StatefulWidget {
 class _SermonDetailState extends State<SermonDetail> {
   late Sermon sermon = widget.sermon;
   final question = TextEditingController();
+  late final title = TextEditingController(text: widget.sermon.title);
   final messages = <SermonMessage>[];
   bool busy = false;
   @override
   void dispose() {
     question.dispose();
+    title.dispose();
     super.dispose();
   }
 
@@ -925,6 +960,88 @@ class _SermonDetailState extends State<SermonDetail> {
     }
   }
 
+  Future<void> editTitle() async {
+    title.text = sermon.title;
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Edit sermon title'),
+        content: TextField(
+            controller: title,
+            autofocus: true,
+            textInputAction: TextInputAction.done),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (updated != true || title.text.trim().isEmpty) return;
+    setState(() => busy = true);
+    try {
+      final response = await widget.api.request('/sermons/${sermon.id}',
+          method: 'PATCH', auth: true, body: {'title': title.text.trim()});
+      final data = dataOf(response);
+      if (data is Map && mounted) {
+        setState(() => sermon = Sermon.fromJson(data.cast<String, dynamic>()));
+      }
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> retryProcessing() async {
+    setState(() => busy = true);
+    try {
+      final response = await widget.api
+          .request('/sermons/${sermon.id}/process', method: 'POST', auth: true);
+      final data = dataOf(response);
+      if (data is Map && mounted) {
+        setState(() => sermon = Sermon.fromJson(data.cast<String, dynamic>()));
+      }
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> deleteSermon() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete this sermon?'),
+        content:
+            const Text('This permanently removes the sermon and its notes.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => busy = true);
+    try {
+      await widget.api
+          .request('/sermons/${sermon.id}', method: 'DELETE', auth: true);
+      if (mounted) Navigator.pop(context, true);
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final note = sermon.notes;
@@ -944,7 +1061,22 @@ class _SermonDetailState extends State<SermonDetail> {
         ));
     return Scaffold(
       appBar: AppBar(title: Text(sermon.title), actions: [
-        IconButton(onPressed: refresh, icon: const Icon(Icons.refresh))
+        IconButton(
+            onPressed: busy ? null : editTitle,
+            icon: const Icon(Icons.edit_outlined)),
+        IconButton(
+            onPressed: busy ? null : refresh, icon: const Icon(Icons.refresh)),
+        PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'retry') retryProcessing();
+              if (value == 'delete') deleteSermon();
+            },
+            itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'retry', child: Text('Retry processing')),
+                  const PopupMenuItem(
+                      value: 'delete', child: Text('Delete sermon')),
+                ])
       ]),
       body: busy
           ? const Loading()
@@ -1579,13 +1711,112 @@ class _AccountSettingsState extends State<AccountSettings> {
   late final name = TextEditingController(text: widget.auth.user?.name);
   late final email = TextEditingController(text: widget.auth.user?.email);
   final feedback = TextEditingController();
+  late final subscriptions = SubscriptionManager(
+      api: widget.api,
+      onStatus: (status) {
+        if (mounted) setState(() => purchaseStatus = status);
+      });
+  Entitlements? entitlements;
+  NotificationPreferences notifications = const NotificationPreferences();
+  SubscriptionStatus purchaseStatus =
+      const SubscriptionStatus(SubscriptionState.disabled);
   bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    loadAccountData();
+    subscriptions.loadProducts();
+  }
+
   @override
   void dispose() {
     name.dispose();
     email.dispose();
     feedback.dispose();
+    subscriptions.dispose();
     super.dispose();
+  }
+
+  Future<void> loadAccountData() async {
+    try {
+      final results = await Future.wait([
+        widget.api.request('/entitlements', auth: true),
+        widget.api.request('/mobile/purchases/status', auth: true),
+        widget.api.request('/mobile/notification-preferences', auth: true),
+      ]);
+      if (!mounted) return;
+      final entitlementData = dataOf(results[0]);
+      final statusData = dataOf(results[1]);
+      final preferenceData = dataOf(results[2]);
+      setState(() {
+        if (entitlementData is Map) {
+          entitlements =
+              Entitlements.fromJson(entitlementData.cast<String, dynamic>());
+        }
+        if (statusData is Map) {
+          entitlements =
+              Entitlements.fromJson(statusData.cast<String, dynamic>());
+        }
+        if (preferenceData is Map) {
+          notifications = NotificationPreferences.fromJson(
+              preferenceData.cast<String, dynamic>());
+        }
+      });
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    }
+  }
+
+  Future<void> saveNotifications() async {
+    try {
+      await widget.api.request('/mobile/notification-preferences',
+          method: 'PUT', auth: true, body: notifications.toJson());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notification preferences saved')));
+      }
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    final confirmation = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete account permanently?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'This removes your account, tokens, subscriptions, sermons, and preferences.'),
+          const SizedBox(height: 12),
+          TextField(
+              controller: confirmation,
+              decoration:
+                  const InputDecoration(labelText: 'Type DELETE to confirm')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, confirmation.text.trim() == 'DELETE'),
+              child: const Text('Delete account')),
+        ],
+      ),
+    );
+    confirmation.dispose();
+    if (confirmed != true) return;
+    setState(() => busy = true);
+    try {
+      await widget.auth.deleteAccount();
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> save() async {
@@ -1647,11 +1878,28 @@ class _AccountSettingsState extends State<AccountSettings> {
         const SizedBox(height: 20),
         const Text('Membership',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-        const ListTile(
+        ListTile(
             leading: Icon(Icons.stars_outlined),
             title: Text('Membership and usage'),
             subtitle: Text(
-                'Native purchases remain disabled until platform billing and receipt validation are approved.')),
+                '${entitlements?.membership.plan ?? 'Free'} · ${entitlements?.membership.status ?? 'unknown'}'),
+            trailing: IconButton(
+                tooltip: 'Refresh membership',
+                onPressed: loadAccountData,
+                icon: const Icon(Icons.refresh))),
+        if (entitlements?.usage.isNotEmpty == true)
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text('Usage: ${entitlements!.usage}'))),
+        OutlinedButton(
+            onPressed: () => subscriptions.restore(),
+            child: const Text('Restore purchases')),
+        if (subscriptions.products.isNotEmpty)
+          ...subscriptions.products.map((product) => FilledButton(
+              onPressed: () => subscriptions.buy(product),
+              child: Text('Subscribe · ${product.price}'))),
+        Text('Purchase status: ${purchaseStatus.state.name}'),
         const SizedBox(height: 20),
         const Text('Feedback',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
@@ -1663,11 +1911,58 @@ class _AccountSettingsState extends State<AccountSettings> {
         OutlinedButton(
             onPressed: sendFeedback, child: const Text('Send feedback')),
         const SizedBox(height: 20),
-        const ListTile(
-            leading: Icon(Icons.notifications_none),
-            title: Text('Notifications'),
-            subtitle: Text(
-                'FCM/APNs credentials and a device-token backend contract are still required.'))
+        const Text('Notifications',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+        SwitchListTile(
+            title: const Text('Enable notifications'),
+            value: notifications.enabled,
+            onChanged: (value) => setState(() => notifications =
+                NotificationPreferences(
+                    enabled: value,
+                    sermonProcessing: notifications.sermonProcessing,
+                    devotionalReminders: notifications.devotionalReminders,
+                    subscriptionUpdates: notifications.subscriptionUpdates))),
+        SwitchListTile(
+            title: const Text('Sermon processing updates'),
+            value: notifications.sermonProcessing,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications =
+                    NotificationPreferences(
+                        enabled: notifications.enabled,
+                        sermonProcessing: value,
+                        devotionalReminders: notifications.devotionalReminders,
+                        subscriptionUpdates: notifications.subscriptionUpdates))
+                : null),
+        SwitchListTile(
+            title: const Text('Devotional reminders'),
+            value: notifications.devotionalReminders,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications =
+                    NotificationPreferences(
+                        enabled: notifications.enabled,
+                        sermonProcessing: notifications.sermonProcessing,
+                        devotionalReminders: value,
+                        subscriptionUpdates: notifications.subscriptionUpdates))
+                : null),
+        SwitchListTile(
+            title: const Text('Subscription updates'),
+            value: notifications.subscriptionUpdates,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications =
+                    NotificationPreferences(
+                        enabled: notifications.enabled,
+                        sermonProcessing: notifications.sermonProcessing,
+                        devotionalReminders: notifications.devotionalReminders,
+                        subscriptionUpdates: value))
+                : null),
+        OutlinedButton(
+            onPressed: saveNotifications,
+            child: const Text('Save notification preferences')),
+        const SizedBox(height: 20),
+        TextButton(
+            onPressed: busy ? null : deleteAccount,
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete account permanently'))
       ]));
 }
 

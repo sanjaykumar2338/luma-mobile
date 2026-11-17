@@ -48,32 +48,32 @@ entitlements.
 - Added `POST /api/v1/mobile/auth/login` and `POST /api/v1/mobile/auth/register`
   returning a personal-access token plus the user resource.
 - Added `POST /api/v1/mobile/auth/logout` to revoke the current token.
-- Native push lifecycle and token-refresh code is present but disabled by
-  default. Credentials and the separate device-token contract are still needed
-  before enabling it.
-- Native subscription lifecycle code is present but disabled by default. Store
-  products and server-side receipt validation are still needed before enabling
-  it.
+- Native push lifecycle, token refresh, notification preferences, and tap
+  routing are integrated against `/mobile/device-tokens` and
+  `/mobile/notification-preferences`; Firebase remains disabled by default.
+- Native subscription lifecycle, purchase verification, restore, and
+  entitlement status refresh are integrated against
+  `/mobile/purchases/verify` and `/mobile/purchases/status`; billing remains
+  disabled by default.
 
 ## Backend/platform gaps
 
 - File submission uses the existing `POST /api/v1/sermons` `media` field; no
   new backend endpoint is required for that path.
-- Native push requires APNs/FCM credentials and a versioned device-token
-  contract; the current `/push-subscriptions` endpoint accepts browser Web Push
-  keys and is intentionally not called by the mobile app.
-- Native subscription purchases require an approved Apple/Google billing flow
-  and server-side receipt validation. The mobile app does not expose Stripe or
-  OpenAI credentials.
+- Native push requires APNs/FCM credentials; the current `/push-subscriptions`
+  endpoint accepts browser Web Push keys and is intentionally not called by
+  the mobile app.
+- Native subscription purchases require Apple/Google store credentials and the
+  server-side verification credentials. The mobile app does not expose Stripe
+  or OpenAI credentials.
 - The existing billing checkout/portal endpoints are web-oriented; they should
   only be opened through a compliant platform flow after product/legal review.
 - Multipart upload uses the Laravel limits: FLAC, MP3, MP4, MPEG, MPGA, M4A,
   OGG, WAV, or WEBM, with a 25 MB client-side limit matching the current
   backend configuration.
-- Native notification provider wiring is intentionally pending credentials and
-  a dedicated FCM/APNs device-token endpoint; see `PUSH_NOTIFICATIONS.md`.
-- Exact proposed mobile-only contracts and unresolved backend questions are in
-  `BACKEND_REQUIREMENTS.md`.
+- Native notification provider wiring is pending credentials; see
+  `PUSH_NOTIFICATIONS.md`.
+- The synchronized contract summary is in `BACKEND_REQUIREMENTS.md`.
 
 ## Next development task
 

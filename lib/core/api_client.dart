@@ -112,7 +112,8 @@ class ApiClient {
             headers: headers, body: body == null ? null : jsonEncode(body)),
         'PUT' => _client.put(uri,
             headers: headers, body: body == null ? null : jsonEncode(body)),
-        'DELETE' => _client.delete(uri, headers: headers),
+        'DELETE' => _client.delete(uri,
+            headers: headers, body: body == null ? null : jsonEncode(body)),
         _ => _client.get(uri, headers: headers),
       };
     } on SocketException {

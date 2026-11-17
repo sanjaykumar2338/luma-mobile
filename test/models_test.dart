@@ -60,4 +60,20 @@ void main() {
     expect(passage.text, contains('loved'));
     expect(plan.days, hasLength(1));
   });
+
+  test('round-trips notification preferences using the mobile contract', () {
+    final preferences = NotificationPreferences.fromJson({
+      'enabled': true,
+      'sermon_processing': false,
+      'devotional_reminders': true,
+      'subscription_updates': false,
+    });
+
+    expect(preferences.toJson(), {
+      'enabled': true,
+      'sermon_processing': false,
+      'devotional_reminders': true,
+      'subscription_updates': false,
+    });
+  });
 }

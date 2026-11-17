@@ -4,11 +4,13 @@ import 'api_client.dart';
 import 'models.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthController({ApiClient? api, FlutterSecureStorage? storage})
+  AuthController(
+      {ApiClient? api, FlutterSecureStorage? storage, this.beforeSignOut})
       : _api = api ?? ApiClient(storage: storage),
         _storage = storage ?? const FlutterSecureStorage();
   final ApiClient _api;
   final FlutterSecureStorage _storage;
+  final Future<void> Function()? beforeSignOut;
   User? user;
   bool loading = true;
   ApiException? error;
@@ -59,6 +61,11 @@ class AuthController extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
+      try {
+        await beforeSignOut?.call();
+      } catch (_) {
+        // Token removal must not prevent the user from signing out locally.
+      }
       await _api.request('/mobile/auth/logout', method: 'POST', auth: true);
     } finally {
       await _storage.delete(key: 'luma_access_token');
@@ -81,4 +88,12 @@ class AuthController extends ChangeNotifier {
         'password': next,
         'password_confirmation': confirmation
       });
+
+  Future<void> deleteAccount() async {
+    await _api.request('/user',
+        method: 'DELETE', auth: true, body: const {'confirmation': 'DELETE'});
+    await _storage.delete(key: 'luma_access_token');
+    user = null;
+    notifyListeners();
+  }
 }
