@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -105,7 +106,7 @@ class ApiClient {
     }
     late http.Response response;
     try {
-      response = await switch (method) {
+      response = await (switch (method) {
         'POST' => _client.post(uri,
             headers: headers, body: body == null ? null : jsonEncode(body)),
         'PATCH' => _client.patch(uri,
@@ -115,7 +116,11 @@ class ApiClient {
         'DELETE' => _client.delete(uri,
             headers: headers, body: body == null ? null : jsonEncode(body)),
         _ => _client.get(uri, headers: headers),
-      };
+      })
+          .timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      throw const ApiException(
+          'The server took too long to respond. Please try again.');
     } on SocketException {
       throw const ApiException(
           'You appear to be offline. Check your connection and try again.');

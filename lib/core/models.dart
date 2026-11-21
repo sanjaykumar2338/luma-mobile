@@ -82,6 +82,10 @@ class NotificationPreferences {
 String textValue(dynamic value) => value?.toString() ?? '';
 List<dynamic> listValue(dynamic value) => value is List ? value : const [];
 
+int intValue(dynamic value, [int fallback = 0]) => value is num
+    ? value.toInt()
+    : int.tryParse(value?.toString() ?? '') ?? fallback;
+
 class Sermon {
   const Sermon(
       {required this.id,
@@ -186,9 +190,13 @@ class BibleBook {
   final String slug, name;
   final int chapters;
   factory BibleBook.fromJson(Map<String, dynamic> j) => BibleBook(
-      slug: textValue(j['slug'] ?? j['key']),
+      slug: textValue(j['id'] ?? j['slug'] ?? j['key']),
       name: textValue(j['name']),
-      chapters: j['chapters'] as int? ?? 0);
+      chapters: intValue(j['chapter_count'] ?? j['chapters']) != 0
+          ? intValue(j['chapter_count'] ?? j['chapters'])
+          : j['chapters'] is List
+              ? (j['chapters'] as List).length
+              : 0);
 }
 
 class BiblePassage {
@@ -196,10 +204,33 @@ class BiblePassage {
       {required this.reference, required this.text, this.verses = const []});
   final String reference, text;
   final List<dynamic> verses;
-  factory BiblePassage.fromJson(Map<String, dynamic> j) => BiblePassage(
-      reference: textValue(j['reference']),
-      text: textValue(j['text']),
-      verses: listValue(j['verses']));
+  factory BiblePassage.fromJson(Map<String, dynamic> j) {
+    final rawVerses = listValue(j['verses']);
+    final verseTexts = rawVerses
+        .whereType<Map>()
+        .map((verse) => textValue(verse['text']))
+        .where((text) => text.isNotEmpty)
+        .toList();
+    final book = j['book'] is Map
+        ? textValue((j['book'] as Map)['name'])
+        : textValue(j['book']);
+    final chapter = textValue(j['chapter']);
+    final start = intValue(j['verse_start']);
+    final end = intValue(j['verse_end'], start);
+    final derivedReference = [
+      if (book.isNotEmpty) book,
+      if (chapter.isNotEmpty) '$chapter${start > 0 ? ':$start' : ''}',
+      if (end > start && start > 0) '-$end',
+    ].join(' ');
+    return BiblePassage(
+        reference: textValue(j['reference']).isNotEmpty
+            ? textValue(j['reference'])
+            : derivedReference,
+        text: textValue(j['text']).isNotEmpty
+            ? textValue(j['text'])
+            : verseTexts.join('\n'),
+        verses: rawVerses);
+  }
 }
 
 class BibleStudy {
@@ -211,12 +242,20 @@ class BibleStudy {
       this.notes = ''});
   final int id;
   final String title, reference, content, notes;
-  factory BibleStudy.fromJson(Map<String, dynamic> j) => BibleStudy(
-      id: j['id'] as int? ?? 0,
-      title: textValue(j['title']),
-      reference: textValue(j['scripture_reference']),
-      content: textValue(j['content']),
-      notes: textValue(j['personal_notes']));
+  factory BibleStudy.fromJson(Map<String, dynamic> j) {
+    final rawContent = j['content'];
+    final content = rawContent is Map
+        ? rawContent.entries
+            .map((entry) => '${entry.key}: ${textValue(entry.value)}')
+            .join('\n\n')
+        : textValue(rawContent);
+    return BibleStudy(
+        id: j['id'] as int? ?? 0,
+        title: textValue(j['title']),
+        reference: textValue(j['scripture_reference']),
+        content: content,
+        notes: textValue(j['personal_notes']));
+  }
 }
 
 class ReadingPlan {

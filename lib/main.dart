@@ -42,6 +42,25 @@ String prettyStatus(String value) => value
         part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
     .join(' ');
 
+String usageSummary(Map<String, dynamic> usage) {
+  const labels = {
+    'sermon_processing': 'Sermons',
+    'ask_luma': 'Ask LUMA',
+    'bible_study': 'Bible studies',
+    'devotional': 'Devotionals',
+  };
+  final items = <String>[];
+  for (final entry in usage.entries) {
+    if (entry.value is! Map) continue;
+    final values = (entry.value as Map).cast<String, dynamic>();
+    final used = values['used'];
+    final limit = values['limit'];
+    if (used == null || limit == null) continue;
+    items.add('${labels[entry.key] ?? prettyStatus(entry.key)} $used/$limit');
+  }
+  return items.isEmpty ? 'Unavailable' : items.join(' · ');
+}
+
 void showError(BuildContext context, Object error) {
   final message = error is ApiException ? error.message : error.toString();
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -660,7 +679,7 @@ class _DashboardState extends State<Dashboard> {
                               label: 'AI usage',
                               value: entitlements?.usage.isEmpty ?? true
                                   ? '—'
-                                  : 'Tracked'))
+                                  : usageSummary(entitlements!.usage)))
                     ]),
                     const SizedBox(height: 24),
                     const Text('Recent sermons',
@@ -944,11 +963,42 @@ class _SermonDetailState extends State<SermonDetail> {
   late final title = TextEditingController(text: widget.sermon.title);
   final messages = <SermonMessage>[];
   bool busy = false;
+  bool messagesBusy = false;
+  String? messagesError;
+
+  @override
+  void initState() {
+    super.initState();
+    refresh();
+    loadMessages();
+  }
+
   @override
   void dispose() {
     question.dispose();
     title.dispose();
     super.dispose();
+  }
+
+  Future<void> loadMessages() async {
+    if (mounted) setState(() => messagesBusy = true);
+    try {
+      final response = await widget.api
+          .request('/sermons/${sermon.id}/conversation/messages', auth: true);
+      final loaded = mapsOf(response).map(SermonMessage.fromJson).toList();
+      if (mounted) {
+        setState(() {
+          messages
+            ..clear()
+            ..addAll(loaded);
+          messagesError = null;
+        });
+      }
+    } on ApiException catch (error) {
+      if (mounted) setState(() => messagesError = error.message);
+    } finally {
+      if (mounted) setState(() => messagesBusy = false);
+    }
   }
 
   Future<void> refresh() async {
@@ -978,8 +1028,11 @@ class _SermonDetailState extends State<SermonDetail> {
           body: {'content': text});
       final data = dataOf(response);
       if (data is Map && data['answer'] is Map) {
-        setState(() => messages.add(SermonMessage.fromJson(
-            (data['answer'] as Map).cast<String, dynamic>())));
+        final answer = SermonMessage.fromJson(
+            (data['answer'] as Map).cast<String, dynamic>());
+        if (mounted) setState(() => messages.add(answer));
+      } else {
+        throw const ApiException('LUMA returned no answer. Please retry.');
       }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
@@ -1113,19 +1166,44 @@ class _SermonDetailState extends State<SermonDetail> {
                 if (sermon.error != null)
                   Text(sermon.error!,
                       style: const TextStyle(color: Colors.red)),
-                if (note != null) ...[
-                  const Text('Generated notes',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Text(note.summary),
+                const Text('Summary and main idea',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (note == null ||
+                    (note.summary.isEmpty && note.mainIdea.isEmpty))
+                  const Text('No generated notes are available yet.')
+                else ...[
+                  if (note.summary.isNotEmpty) Text(note.summary),
                   if (note.mainIdea.isNotEmpty)
                     Text('Main idea: ${note.mainIdea}'),
                 ],
+                if (note != null && note.keyPoints.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text('Key points',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  ...note.keyPoints.map((point) => Text('• $point')),
+                ],
+                const SizedBox(height: 24),
+                const Text('Transcript',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                if (sermon.transcript?.isNotEmpty != true)
+                  const Text('No transcript is available for this sermon.')
+                else
+                  SelectableText(sermon.transcript!),
                 const SizedBox(height: 24),
                 const Text('Ask LUMA',
                     style:
                         TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                if (messagesBusy) const LinearProgressIndicator(),
+                if (messagesError != null)
+                  Text(messagesError!,
+                      style: const TextStyle(color: Colors.red)),
+                if (!messagesBusy && messages.isEmpty && messagesError == null)
+                  const Text('Ask a question about this sermon.'),
                 ...chat,
                 Row(children: [
                   Expanded(
@@ -1155,6 +1233,7 @@ class _BibleReaderState extends State<BibleReader> {
   BibleBook? book;
   int chapter = 1;
   BiblePassage? passage;
+  String? loadError;
   final search = TextEditingController();
   @override
   void initState() {
@@ -1176,11 +1255,15 @@ class _BibleReaderState extends State<BibleReader> {
         setState(() {
           books = mapsOf(response).map(BibleBook.fromJson).toList();
           busy = false;
+          loadError = null;
         });
       }
     } catch (value) {
       if (mounted) {
-        setState(() => busy = false);
+        setState(() {
+          busy = false;
+          loadError = value.toString();
+        });
         showError(context, value);
       }
     }
@@ -1195,15 +1278,26 @@ class _BibleReaderState extends State<BibleReader> {
           auth: true,
           query: {'translation': translation});
       if (mounted) {
+        final data = dataOf(response);
+        if (data is! Map) {
+          throw const ApiException('The Bible passage response was invalid.');
+        }
+        final parsed = BiblePassage.fromJson(data.cast<String, dynamic>());
+        if (parsed.verses.isEmpty || parsed.text.isEmpty) {
+          throw const ApiException('No verses were returned for this chapter.');
+        }
         setState(() {
-          passage = BiblePassage.fromJson(
-              (dataOf(response) as Map).cast<String, dynamic>());
+          passage = parsed;
           busy = false;
+          loadError = null;
         });
       }
     } on ApiException catch (error) {
       if (mounted) {
-        setState(() => busy = false);
+        setState(() {
+          busy = false;
+          loadError = error.message;
+        });
         showError(context, error);
       }
     }
@@ -1266,6 +1360,8 @@ class _BibleReaderState extends State<BibleReader> {
         child: busy && books.isEmpty
             ? const Loading()
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (loadError != null && books.isNotEmpty)
+                  Text(loadError!, style: const TextStyle(color: Colors.red)),
                 DropdownButtonFormField<String>(
                     value: translation,
                     decoration: const InputDecoration(labelText: 'Translation'),
@@ -1327,8 +1423,15 @@ class _BibleReaderState extends State<BibleReader> {
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  SelectableText(passage!.text,
-                      style: const TextStyle(fontSize: 18, height: 1.5))
+                  if (passage!.verses.isNotEmpty)
+                    ...passage!.verses.whereType<Map>().map((verse) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SelectableText(
+                            '${verse['number'] ?? ''} ${verse['text'] ?? ''}',
+                            style: const TextStyle(fontSize: 18, height: 1.5))))
+                  else
+                    SelectableText(passage!.text,
+                        style: const TextStyle(fontSize: 18, height: 1.5))
                 ],
               ]),
       );
@@ -1345,6 +1448,7 @@ class StudyHub extends StatefulWidget {
 class _StudyHubState extends State<StudyHub> {
   bool busy = true;
   bool generating = false;
+  String? generationError;
   late final passage = TextEditingController(
       text: widget.initialPassage?.isNotEmpty == true
           ? widget.initialPassage
@@ -1381,7 +1485,10 @@ class _StudyHubState extends State<StudyHub> {
   }
 
   Future<void> generate() async {
-    setState(() => generating = true);
+    setState(() {
+      generating = true;
+      generationError = null;
+    });
     try {
       final response = await widget.api.request('/bible-studies',
           method: 'POST',
@@ -1389,7 +1496,10 @@ class _StudyHubState extends State<StudyHub> {
           body: {'reader_reference': passage.text.trim(), 'depth': depth},
           idempotencyKey: 'mobile-${DateTime.now().microsecondsSinceEpoch}');
       final data = dataOf(response);
-      if (mounted && data is Map) {
+      if (data is! Map) {
+        throw const ApiException('The study response was invalid.');
+      }
+      if (mounted) {
         Navigator.push(
             context,
             MaterialPageRoute(
@@ -1398,7 +1508,10 @@ class _StudyHubState extends State<StudyHub> {
       }
       await load();
     } on ApiException catch (error) {
-      if (mounted) showError(context, error);
+      if (mounted) {
+        setState(() => generationError = error.message);
+        showError(context, error);
+      }
     } finally {
       if (mounted) setState(() => generating = false);
     }
@@ -1430,6 +1543,9 @@ class _StudyHubState extends State<StudyHub> {
                   onSelectionChanged: (value) =>
                       setState(() => depth = value.first)),
               const SizedBox(height: 16),
+              if (generationError != null)
+                Text(generationError!,
+                    style: const TextStyle(color: Colors.red)),
               FilledButton.icon(
                   onPressed: generating ? null : generate,
                   icon: const Icon(Icons.auto_awesome),
@@ -1725,6 +1841,121 @@ class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
       ]));
 }
 
+class MembershipScreen extends StatefulWidget {
+  const MembershipScreen({required this.api, super.key});
+  final ApiClient api;
+
+  @override
+  State<MembershipScreen> createState() => _MembershipScreenState();
+}
+
+class _MembershipScreenState extends State<MembershipScreen> {
+  late final SubscriptionManager subscriptions = SubscriptionManager(
+      api: widget.api,
+      onStatus: (status) {
+        if (mounted) setState(() => purchaseStatus = status);
+      });
+  Entitlements? entitlements;
+  SubscriptionStatus purchaseStatus =
+      const SubscriptionStatus(SubscriptionState.disabled);
+  bool busy = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+    subscriptions.loadProducts();
+  }
+
+  @override
+  void dispose() {
+    subscriptions.dispose();
+    super.dispose();
+  }
+
+  Future<void> load() async {
+    setState(() => busy = true);
+    try {
+      final response = await widget.api.request('/entitlements', auth: true);
+      if (mounted) {
+        setState(() {
+          entitlements = Entitlements.fromJson(
+              (dataOf(response) as Map).cast<String, dynamic>());
+          busy = false;
+          error = null;
+        });
+      }
+    } on ApiException catch (value) {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          error = value.message;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Membership')),
+        body: busy
+            ? const Loading()
+            : error != null
+                ? EmptyState(title: 'Membership unavailable', message: error!)
+                : ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      Text(
+                          'Current plan: ${entitlements?.membership.plan ?? 'free'} · ${entitlements?.membership.status ?? 'unknown'}',
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w700)),
+                      if (entitlements?.membership.endsAt != null)
+                        Text(
+                            'Renews or ends: ${entitlements!.membership.endsAt}'),
+                      const SizedBox(height: 24),
+                      const Text('Free',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w700)),
+                      const Text('Core Bible reading and limited AI features.'),
+                      const SizedBox(height: 18),
+                      const Text('Premium',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w700)),
+                      const Text(
+                          'Higher AI limits, sermon processing, Ask LUMA, and deeper study tools.'),
+                      const SizedBox(height: 18),
+                      if (subscriptions.products.isEmpty)
+                        Card(
+                            child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(purchaseStatus.state ==
+                                        SubscriptionState.disabled
+                                    ? 'Subscriptions are not available in this build. Store products and server verification must be configured first.'
+                                    : 'No store products are currently available.'))),
+                      ...subscriptions.products.map((product) => FilledButton(
+                          onPressed: () => subscriptions.buy(product),
+                          child: Text(
+                              'Subscribe · ${product.title} ${product.price}'))),
+                      OutlinedButton(
+                          onPressed: subscriptions.products.isEmpty
+                              ? null
+                              : () => subscriptions.restore(),
+                          child: const Text('Restore purchases')),
+                      Text('Purchase status: ${purchaseStatus.state.name}'),
+                      const SizedBox(height: 24),
+                      const Text('Usage',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w700)),
+                      Text(usageSummary(entitlements?.usage ?? const {})),
+                      OutlinedButton(
+                          onPressed: load,
+                          child: const Text('Refresh membership')),
+                    ],
+                  ),
+      );
+}
+
 class AccountSettings extends StatefulWidget {
   const AccountSettings({required this.auth, required this.api, super.key});
   final AuthController auth;
@@ -1924,7 +2155,11 @@ class _AccountSettingsState extends State<AccountSettings> {
             trailing: IconButton(
                 tooltip: 'Refresh membership',
                 onPressed: loadAccountData,
-                icon: const Icon(Icons.refresh))),
+                icon: const Icon(Icons.refresh)),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => MembershipScreen(api: widget.api)))),
         if (entitlements?.usage.isNotEmpty == true)
           Card(
               child: Padding(

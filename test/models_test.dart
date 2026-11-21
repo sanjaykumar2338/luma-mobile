@@ -47,8 +47,16 @@ void main() {
   });
 
   test('parses Bible passages and reading plans', () {
-    final passage = BiblePassage.fromJson(
-        {'reference': 'John 3:16', 'text': 'For God so loved the world.'});
+    final passage = BiblePassage.fromJson({
+      'translation': {'abbreviation': 'WEB'},
+      'book': {'id': 'JHN', 'name': 'John'},
+      'chapter': 3,
+      'verse_start': 16,
+      'verse_end': 16,
+      'verses': [
+        {'number': 16, 'text': 'For God so loved the world.'}
+      ]
+    });
     final plan = ReadingPlan.fromJson({
       'id': 1,
       'title': 'Seven days',
@@ -58,7 +66,35 @@ void main() {
       ]
     });
     expect(passage.text, contains('loved'));
+    expect(passage.reference, 'John 3:16');
+    expect(passage.verses, hasLength(1));
     expect(plan.days, hasLength(1));
+  });
+
+  test('uses the API Bible book id and chapter_count fields', () {
+    final books = [
+      BibleBook.fromJson({'id': 'GEN', 'name': 'Genesis', 'chapter_count': 50}),
+      BibleBook.fromJson({'id': 'PSA', 'name': 'Psalms', 'chapter_count': 150}),
+      BibleBook.fromJson({'id': 'JHN', 'name': 'John', 'chapter_count': 21}),
+    ];
+
+    expect(books.map((book) => book.slug), ['GEN', 'PSA', 'JHN']);
+    expect(books.map((book) => book.chapters), [50, 150, 21]);
+  });
+
+  test('renders structured Bible study content instead of an empty object', () {
+    final study = BibleStudy.fromJson({
+      'id': 3,
+      'title': 'A study',
+      'scripture_reference': 'John 3:16',
+      'content': {
+        'overview': 'God gives life.',
+        'application': ['Trust']
+      },
+    });
+
+    expect(study.content, contains('overview: God gives life.'));
+    expect(study.content, contains('application: [Trust]'));
   });
 
   test('round-trips notification preferences using the mobile contract', () {
