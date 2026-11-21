@@ -1856,7 +1856,13 @@ class _MembershipScreenState extends State<MembershipScreen> {
   late final SubscriptionManager subscriptions = SubscriptionManager(
       api: widget.api,
       onStatus: (status) {
-        if (mounted) setState(() => purchaseStatus = status);
+        if (mounted) {
+          setState(() => purchaseStatus = status);
+          if (status.state == SubscriptionState.purchased ||
+              status.state == SubscriptionState.restored) {
+            load();
+          }
+        }
       });
   Entitlements? entitlements;
   SubscriptionStatus purchaseStatus =
@@ -1880,7 +1886,13 @@ class _MembershipScreenState extends State<MembershipScreen> {
   Future<void> load() async {
     setState(() => busy = true);
     try {
-      final response = await widget.api.request('/entitlements', auth: true);
+      Map<String, dynamic> response;
+      try {
+        response = await widget.api
+            .request('/mobile/purchases/status', auth: true);
+      } on ApiException {
+        response = await widget.api.request('/entitlements', auth: true);
+      }
       if (mounted) {
         setState(() {
           entitlements = Entitlements.fromJson(
@@ -1897,6 +1909,28 @@ class _MembershipScreenState extends State<MembershipScreen> {
         });
       }
     }
+  }
+
+  Future<void> manageSubscription() async {
+    final nativeUrl = Theme.of(context).platform == TargetPlatform.iOS
+        ? 'https://apps.apple.com/account/subscriptions'
+        : 'https://play.google.com/store/account/subscriptions';
+    if (entitlements?.membership.billingEnabled == true) {
+      try {
+        final response =
+            await widget.api.request('/billing/portal', method: 'POST', auth: true);
+        final data = dataOf(response);
+        final url = data is Map ? data['url']?.toString() : null;
+        if (url != null &&
+            await launchUrl(Uri.parse(url),
+                mode: LaunchMode.externalApplication)) {
+          return;
+        }
+      } on ApiException {
+        // Native subscriptions are managed in their respective stores.
+      }
+    }
+    await launchUrl(Uri.parse(nativeUrl), mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -1916,6 +1950,10 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       if (entitlements?.membership.endsAt != null)
                         Text(
                             'Renews or ends: ${entitlements!.membership.endsAt}'),
+                      OutlinedButton.icon(
+                          onPressed: manageSubscription,
+                          icon: const Icon(Icons.open_in_new),
+                          label: const Text('Manage subscription')),
                       const SizedBox(height: 24),
                       const Text('Free',
                           style: TextStyle(
@@ -1941,10 +1979,18 @@ class _MembershipScreenState extends State<MembershipScreen> {
                           child: Text(
                               'Subscribe · ${product.title} ${product.price}'))),
                       OutlinedButton(
-                          onPressed: subscriptions.products.isEmpty
+                          onPressed: purchaseStatus.state ==
+                                  SubscriptionState.pending
                               ? null
-                              : () => subscriptions.restore(),
+                              : () async {
+                                  await subscriptions.restore();
+                                  await load();
+                                },
                           child: const Text('Restore purchases')),
+                      if (purchaseStatus.message != null)
+                        Text(purchaseStatus.message!,
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.error)),
                       Text('Purchase status: ${purchaseStatus.state.name}'),
                       const SizedBox(height: 24),
                       const Text('Usage',
@@ -1952,7 +1998,7 @@ class _MembershipScreenState extends State<MembershipScreen> {
                               fontSize: 20, fontWeight: FontWeight.w700)),
                       Text(usageSummary(entitlements?.usage ?? const {})),
                       OutlinedButton(
-                          onPressed: load,
+                          onPressed: busy ? null : load,
                           child: const Text('Refresh membership')),
                     ],
                   ),
