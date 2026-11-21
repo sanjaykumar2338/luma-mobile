@@ -49,8 +49,11 @@ String usageSummary(Map<String, dynamic> usage) {
     'bible_study': 'Bible studies',
     'devotional': 'Devotionals',
   };
+  final rawFeatures = usage['features'];
+  final features =
+      rawFeatures is Map ? rawFeatures.cast<String, dynamic>() : usage;
   final items = <String>[];
-  for (final entry in usage.entries) {
+  for (final entry in features.entries) {
     if (entry.value is! Map) continue;
     final values = (entry.value as Map).cast<String, dynamic>();
     final used = values['used'];
