@@ -967,7 +967,10 @@ class _SermonDetailState extends State<SermonDetail> {
   final messages = <SermonMessage>[];
   bool busy = false;
   bool messagesBusy = false;
+  bool asking = false;
   String? messagesError;
+  String? askError;
+  String? lastQuestion;
 
   @override
   void initState() {
@@ -1020,9 +1023,29 @@ class _SermonDetailState extends State<SermonDetail> {
 
   Future<void> ask() async {
     final text = question.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || asking) return;
+    await submitQuestion(text);
+  }
+
+  Future<void> retryAsk() async {
+    final text = lastQuestion;
+    if (text == null || asking) return;
+    await submitQuestion(text, appendUserMessage: false);
+  }
+
+  Future<void> submitQuestion(String text,
+      {bool appendUserMessage = true}) async {
     question.clear();
-    setState(() => messages.add(SermonMessage(role: 'user', content: text)));
+    if (mounted) {
+      setState(() {
+        asking = true;
+        askError = null;
+        lastQuestion = text;
+        if (appendUserMessage) {
+          messages.add(SermonMessage(role: 'user', content: text));
+        }
+      });
+    }
     try {
       final response = await widget.api.request(
           '/sermons/${sermon.id}/conversation/messages',
@@ -1038,7 +1061,9 @@ class _SermonDetailState extends State<SermonDetail> {
         throw const ApiException('LUMA returned no answer. Please retry.');
       }
     } on ApiException catch (error) {
-      if (mounted) showError(context, error);
+      if (mounted) setState(() => askError = error.message);
+    } finally {
+      if (mounted) setState(() => asking = false);
     }
   }
 
@@ -1207,14 +1232,29 @@ class _SermonDetailState extends State<SermonDetail> {
                       style: const TextStyle(color: Colors.red)),
                 if (!messagesBusy && messages.isEmpty && messagesError == null)
                   const Text('Ask a question about this sermon.'),
+                if (asking) const LinearProgressIndicator(),
+                if (askError != null) ...[
+                  Text(askError!, style: const TextStyle(color: Colors.red)),
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                          onPressed: retryAsk,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'))),
+                ],
                 ...chat,
                 Row(children: [
                   Expanded(
                       child: TextField(
                           controller: question,
+                          enabled: !asking,
+                          onSubmitted: (_) => ask(),
                           decoration: const InputDecoration(
                               hintText: 'Ask about this sermon'))),
-                  IconButton(onPressed: ask, icon: const Icon(Icons.send))
+                  IconButton(
+                      onPressed: asking ? null : ask,
+                      tooltip: 'Ask LUMA',
+                      icon: const Icon(Icons.send))
                 ]),
               ],
             ),

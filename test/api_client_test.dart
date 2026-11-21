@@ -66,4 +66,20 @@ void main() {
         .request('/user', method: 'DELETE', body: {'confirmation': 'DELETE'});
     expect(body, jsonEncode({'confirmation': 'DELETE'}));
   });
+
+  test('maps sermon questions to the Laravel conversation contract', () async {
+    Map<String, dynamic>? payload;
+    final api = ApiClient(client: MockClient((request) async {
+      payload = jsonDecode(request.body).cast<String, dynamic>();
+      return http.Response(jsonEncode({'data': {}}), 201);
+    }));
+
+    await api.request('/sermons/7/conversation/messages',
+        method: 'POST', body: {'content': 'What is this sermon about?'});
+
+    expect(payload?['question'], 'What is this sermon about?');
+    expect(payload?['content'], 'What is this sermon about?');
+    expect(payload?['client_request_id'], matches(RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-4000-8000-[0-9a-f]{12}$')));
+  });
 }
