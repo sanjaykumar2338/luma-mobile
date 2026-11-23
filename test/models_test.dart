@@ -63,12 +63,18 @@ void main() {
       'description': 'A beginning',
       'days': [
         {'day_number': 1}
-      ]
+      ],
+      'enrollment': {
+        'id': 22,
+        'completed_day_ids': [4, 5]
+      }
     });
     expect(passage.text, contains('loved'));
     expect(passage.reference, 'John 3:16');
     expect(passage.verses, hasLength(1));
     expect(plan.days, hasLength(1));
+    expect(plan.enrollmentId, 22);
+    expect(plan.completedDayIds, [4, 5]);
   });
 
   test('uses the API Bible book id and chapter_count fields', () {

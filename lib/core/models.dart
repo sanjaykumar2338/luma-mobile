@@ -280,13 +280,22 @@ class ReadingPlan {
       {required this.id,
       required this.title,
       required this.description,
-      required this.days});
+      required this.days,
+      this.enrollmentId,
+      this.completedDayIds = const []});
   final int id;
   final String title, description;
   final List<dynamic> days;
+  final int? enrollmentId;
+  final List<int> completedDayIds;
   factory ReadingPlan.fromJson(Map<String, dynamic> j) => ReadingPlan(
       id: j['id'] as int? ?? 0,
       title: textValue(j['title']),
       description: textValue(j['description']),
-      days: listValue(j['days']));
+      days: listValue(j['days']),
+      enrollmentId: (j['enrollment'] as Map?)?['id'] as int?,
+      completedDayIds: ((j['enrollment'] as Map?)?['completed_day_ids'] as List?)
+              ?.whereType<int>()
+              .toList() ??
+          const []);
 }

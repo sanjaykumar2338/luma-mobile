@@ -69,6 +69,15 @@ void showError(BuildContext context, Object error) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
+Future<void> copyText(BuildContext context, String text, String label) async {
+  if (text.trim().isEmpty) return;
+  await Clipboard.setData(ClipboardData(text: text));
+  if (context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$label copied')));
+  }
+}
+
 class LumaApp extends StatefulWidget {
   const LumaApp({super.key});
 
@@ -563,6 +572,23 @@ class EmptyState extends StatelessWidget {
       ])));
 }
 
+class RetryState extends StatelessWidget {
+  const RetryState(
+      {required this.title, required this.message, required this.onRetry, super.key});
+  final String title;
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+        EmptyState(title: title, message: message),
+        FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try again'))
+      ]);
+}
+
 class Dashboard extends StatefulWidget {
   const Dashboard({required this.auth, required this.api, super.key});
   final AuthController auth;
@@ -639,7 +665,10 @@ class _DashboardState extends State<Dashboard> {
       child: busy
           ? const Loading()
           : error != null
-              ? EmptyState(title: 'Could not load your day', message: error!)
+              ? RetryState(
+                  title: 'Could not load your day',
+                  message: error!,
+                  onRetry: load)
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -810,6 +839,8 @@ class _SermonLibraryState extends State<SermonLibrary> {
   bool busy = true;
   String? error;
   int page = 1;
+  String? statusFilter;
+  final search = TextEditingController();
   List<Sermon> sermons = [];
   @override
   void initState() {
@@ -817,10 +848,19 @@ class _SermonLibraryState extends State<SermonLibrary> {
     load();
   }
 
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
   Future<void> load() async {
     try {
+      final query = <String, String>{'page': '$page', 'per_page': '12'};
+      if (search.text.trim().isNotEmpty) query['search'] = search.text.trim();
+      if (statusFilter != null) query['status'] = statusFilter!;
       final response = await widget.api.request('/sermons',
-          auth: true, query: {'page': '$page', 'per_page': '12'});
+          auth: true, query: query);
       if (mounted) {
         setState(() {
           sermons = mapsOf(response).map(Sermon.fromJson).toList();
@@ -866,36 +906,78 @@ class _SermonLibraryState extends State<SermonLibrary> {
       child: busy
           ? const Loading()
           : error != null
-              ? EmptyState(title: 'Library unavailable', message: error!)
-              : sermons.isEmpty
-                  ? const EmptyState(
-                      title: 'No sermons yet',
-                      message:
-                          'Submit a video link, transcript, or file to begin.')
-                  : Column(children: [
-                      ...items,
-                      Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton(
-                                onPressed: page > 1
-                                    ? () {
-                                        page--;
-                                        load();
-                                      }
-                                    : null,
-                                icon: const Icon(Icons.chevron_left)),
-                            Text('Page $page'),
-                            IconButton(
-                                onPressed: sermons.length == 12
-                                    ? () {
-                                        page++;
-                                        load();
-                                      }
-                                    : null,
-                                icon: const Icon(Icons.chevron_right))
-                          ])
-                    ]),
+              ? RetryState(
+                  title: 'Library unavailable', message: error!, onRetry: load)
+              : Column(children: [
+                  Row(children: [
+                    Expanded(
+                        child: TextField(
+                            controller: search,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) {
+                              page = 1;
+                              load();
+                            },
+                            decoration: const InputDecoration(
+                                labelText: 'Search sermons',
+                                prefixIcon: Icon(Icons.search)))),
+                    const SizedBox(width: 8),
+                    IconButton(
+                        tooltip: 'Apply search',
+                        onPressed: () {
+                          page = 1;
+                          load();
+                        },
+                        icon: const Icon(Icons.arrow_forward))
+                  ]),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String?>(
+                      value: statusFilter,
+                      decoration: const InputDecoration(labelText: 'Filter by status'),
+                      items: const [
+                        DropdownMenuItem<String?>(value: null, child: Text('All sermons')),
+                        DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                        DropdownMenuItem(value: 'failed', child: Text('Needs attention')),
+                        DropdownMenuItem(value: 'analyzing', child: Text('Processing')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          statusFilter = value;
+                          page = 1;
+                        });
+                        load();
+                      }),
+                  const SizedBox(height: 12),
+                  if (sermons.isEmpty)
+                    const EmptyState(
+                        title: 'No sermons yet',
+                        message:
+                            'Submit a video link, transcript, or file to begin.')
+                  else
+                    ...items,
+                  if (sermons.isNotEmpty)
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          IconButton(
+                              onPressed: page > 1
+                                  ? () {
+                                      page--;
+                                      load();
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.chevron_left)),
+                          Text('Page $page'),
+                          IconButton(
+                              onPressed: sermons.length == 12
+                                  ? () {
+                                      page++;
+                                      load();
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.chevron_right))
+                        ])
+                ]),
     );
   }
 }
@@ -1263,6 +1345,19 @@ class _SermonDetailState extends State<SermonDetail> {
                             Text(message.content,
                                 style: TextStyle(
                                     height: 1.4, color: isUser ? cream : ink))
+                            ,
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: IconButton(
+                                    tooltip: 'Copy message',
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () => copyText(context,
+                                        message.content, 'Message'),
+                                    icon: Icon(Icons.copy_outlined,
+                                        size: 17,
+                                        color: isUser
+                                            ? Colors.white70
+                                            : Colors.black45)))
                           ])))));
     }).toList();
     return Scaffold(
@@ -1497,10 +1592,26 @@ class _BibleReaderState extends State<BibleReader> {
   @override
   Widget build(BuildContext context) => PageFrame(
         title: 'Bible reader',
-        action: IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        action: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (passage != null)
+            IconButton(
+                tooltip: 'Copy passage',
+                onPressed: () => copyText(context,
+                    '${passage!.reference}\n\n${passage!.text}', 'Passage'),
+                icon: const Icon(Icons.copy_outlined)),
+          IconButton(
+              tooltip: 'Refresh books',
+              onPressed: load,
+              icon: const Icon(Icons.refresh))
+        ]),
         onRefresh: load,
-        child: busy && books.isEmpty
+          child: busy && books.isEmpty
             ? const Loading()
+            : loadError != null && books.isEmpty
+                ? RetryState(
+                    title: 'Bible unavailable',
+                    message: loadError!,
+                    onRetry: load)
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 if (loadError != null && books.isNotEmpty)
                   Text(loadError!, style: const TextStyle(color: Colors.red)),
@@ -1758,7 +1869,12 @@ class StudyDetail extends StatelessWidget {
   final BibleStudy study;
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: Text(study.title)),
+      appBar: AppBar(title: Text(study.title), actions: [
+        IconButton(
+            tooltip: 'Copy study',
+            onPressed: () => copyText(context, study.content, 'Study'),
+            icon: const Icon(Icons.copy_outlined))
+      ]),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         Text(study.reference, style: const TextStyle(color: Colors.black54)),
         const SizedBox(height: 16),
@@ -1808,6 +1924,7 @@ class Devotionals extends StatefulWidget {
 
 class _DevotionalsState extends State<Devotionals> {
   bool busy = true;
+  String? error;
   Devotional? today;
   List<Devotional> history = [];
   @override
@@ -1830,12 +1947,15 @@ class _DevotionalsState extends State<Devotionals> {
           }
           history = mapsOf(results[1]).map(Devotional.fromJson).toList();
           busy = false;
+          error = null;
         });
       }
     } catch (value) {
       if (mounted) {
-        setState(() => busy = false);
-        showError(context, value);
+        setState(() {
+          busy = false;
+          error = value.toString();
+        });
       }
     }
   }
@@ -1846,6 +1966,11 @@ class _DevotionalsState extends State<Devotionals> {
       onRefresh: load,
       child: busy
           ? const Loading()
+          : error != null
+              ? RetryState(
+                  title: 'Devotionals unavailable',
+                  message: error!,
+                  onRetry: load)
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (today != null)
                 ListTile(
@@ -1874,7 +1999,15 @@ class DevotionalDetail extends StatelessWidget {
   final Devotional devotional;
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: Text(devotional.title)),
+      appBar: AppBar(title: Text(devotional.title), actions: [
+        IconButton(
+            tooltip: 'Copy devotional',
+            onPressed: () => copyText(
+                context,
+                '${devotional.reference}\n\n${devotional.text}\n\n${devotional.reflection}\n\n${devotional.application}\n\n${devotional.prayer}',
+                'Devotional'),
+            icon: const Icon(Icons.copy_outlined))
+      ]),
       body: ListView(padding: const EdgeInsets.all(20), children: [
         Text(devotional.reference,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
@@ -1899,6 +2032,7 @@ class ReadingPlans extends StatefulWidget {
 
 class _ReadingPlansState extends State<ReadingPlans> {
   bool busy = true;
+  String? error;
   List<ReadingPlan> plans = [];
   @override
   void initState() {
@@ -1913,12 +2047,15 @@ class _ReadingPlansState extends State<ReadingPlans> {
         setState(() {
           plans = mapsOf(response).map(ReadingPlan.fromJson).toList();
           busy = false;
+          error = null;
         });
       }
     } catch (value) {
       if (mounted) {
-        setState(() => busy = false);
-        showError(context, value);
+        setState(() {
+          busy = false;
+          error = value.toString();
+        });
       }
     }
   }
@@ -1927,21 +2064,42 @@ class _ReadingPlansState extends State<ReadingPlans> {
   @override
   Widget build(BuildContext context) {
     final items = plans
-        .map((plan) => ListTile(
-            title: Text(plan.title),
-            subtitle: Text('${plan.days.length} days · ${plan.description}'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) =>
-                        ReadingPlanDetail(api: widget.api, plan: plan)))))
+        .map((plan) {
+          final progress = plan.days.isEmpty
+              ? 0.0
+              : plan.completedDayIds.length / plan.days.length;
+          return Card(
+              child: ListTile(
+                  title: Text(plan.title),
+                  subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${plan.days.length} days · ${plan.description}'),
+                        if (plan.enrollmentId != null) ...[
+                          const SizedBox(height: 6),
+                          LinearProgressIndicator(value: progress),
+                          const SizedBox(height: 3),
+                          Text('${plan.completedDayIds.length}/${plan.days.length} days complete')
+                        ]
+                      ]),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              ReadingPlanDetail(api: widget.api, plan: plan)))));
+        })
         .toList();
     return PageFrame(
         title: 'Reading plans',
         onRefresh: load,
         child: busy
             ? const Loading()
+            : error != null
+                ? RetryState(
+                    title: 'Reading plans unavailable',
+                    message: error!,
+                    onRetry: load)
             : plans.isEmpty
                 ? const EmptyState(
                     title: 'No plans available',
@@ -1959,8 +2117,8 @@ class ReadingPlanDetail extends StatefulWidget {
 }
 
 class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
-  int? enrollmentId;
-  final completed = <int>{};
+  late int? enrollmentId = widget.plan.enrollmentId;
+  late final completed = <int>{...widget.plan.completedDayIds};
   bool busy = false;
   Future<void> enroll() async {
     setState(() => busy = true);
@@ -2012,6 +2170,15 @@ class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.plan.description),
         const SizedBox(height: 16),
+        if (widget.plan.days.isNotEmpty)
+          LinearProgressIndicator(
+              value: completed.length / widget.plan.days.length),
+        if (widget.plan.days.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                  '${completed.length} of ${widget.plan.days.length} days complete')),
+        const SizedBox(height: 12),
         FilledButton(
             onPressed: busy ? null : enroll,
             child: Text(
