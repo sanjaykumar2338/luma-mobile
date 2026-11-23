@@ -672,17 +672,54 @@ class _DashboardState extends State<Dashboard> {
                           ]),
                     ),
                     const SizedBox(height: 20),
+                    Card(
+                        child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('Membership',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.w700)),
+                                        Text(prettyStatus(entitlements
+                                                ?.membership.plan ??
+                                            'free'))
+                                      ]),
+                                  Text(entitlements?.membership.status ??
+                                      'Status unavailable'),
+                                  const SizedBox(height: 14),
+                                  const Text('AI usage',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 8),
+                                  UsageOverview(
+                                      usage: entitlements?.usage ?? const {})
+                                ]))),
+                    const SizedBox(height: 24),
                     Row(children: [
                       Expanded(
-                          child: StatCard(
-                              label: 'Membership',
-                              value: entitlements?.membership.plan ?? 'Free')),
+                          child: OutlinedButton.icon(
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          StudyHub(api: widget.api))),
+                              icon: const Icon(Icons.auto_awesome_outlined),
+                              label: const Text('Bible Study'))),
+                      const SizedBox(width: 10),
                       Expanded(
-                          child: StatCard(
-                              label: 'AI usage',
-                              value: entitlements?.usage.isEmpty ?? true
-                                  ? '—'
-                                  : usageSummary(entitlements!.usage)))
+                          child: OutlinedButton.icon(
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          SermonLibrary(api: widget.api))),
+                              icon: const Icon(Icons.library_music_outlined),
+                              label: const Text('Sermons')))
                     ]),
                     const SizedBox(height: 24),
                     const Text('Recent sermons',
@@ -718,6 +755,48 @@ class StatCard extends StatelessWidget {
                 style:
                     const TextStyle(fontSize: 20, fontWeight: FontWeight.w700))
           ])));
+}
+
+class UsageOverview extends StatelessWidget {
+  const UsageOverview({required this.usage, super.key});
+  final Map<String, dynamic> usage;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = usage['features'];
+    final features = raw is Map ? raw.cast<String, dynamic>() : usage;
+    const labels = {
+      'sermon_processing': 'Sermons',
+      'ask_luma': 'Ask LUMA',
+      'bible_study': 'Bible studies',
+      'devotional': 'Devotionals'
+    };
+    final entries = features.entries
+        .where((entry) => entry.value is Map)
+        .map((entry) => MapEntry(entry.key,
+            (entry.value as Map).cast<String, dynamic>()))
+        .where((entry) =>
+            entry.value['used'] != null && entry.value['limit'] != null)
+        .toList();
+    if (entries.isEmpty) return const Text('Usage unavailable');
+    return Column(
+        children: entries.map((entry) {
+      final used = intValue(entry.value['used']);
+      final limit = intValue(entry.value['limit']);
+      final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
+      return Padding(
+          padding: const EdgeInsets.only(bottom: 9),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text(labels[entry.key] ?? prettyStatus(entry.key)),
+              Text('$used/$limit',
+                  style: const TextStyle(color: Colors.black54))
+            ]),
+            const SizedBox(height: 4),
+            LinearProgressIndicator(value: progress)
+          ]));
+    }).toList());
+  }
 }
 
 class SermonLibrary extends StatefulWidget {
@@ -1152,20 +1231,40 @@ class _SermonDetailState extends State<SermonDetail> {
   @override
   Widget build(BuildContext context) {
     final note = sermon.notes;
-    final chat = messages.map((message) => Padding(
-          padding: const EdgeInsets.only(top: 8),
+    final chat = messages.map((message) {
+      final isUser = message.role == 'user';
+      return Padding(
+          padding: const EdgeInsets.only(top: 10),
           child: Align(
-            alignment: message.role == 'user'
-                ? Alignment.centerRight
-                : Alignment.centerLeft,
-            child: Container(
-                padding: const EdgeInsets.all(12),
-                color: message.role == 'user' ? ink : Colors.white,
-                child: Text(message.content,
-                    style: TextStyle(
-                        color: message.role == 'user' ? cream : ink))),
-          ),
-        ));
+              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+              child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 330),
+                  child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                          color: isUser ? ink : Colors.white,
+                          borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isUser ? 16 : 4),
+                              bottomRight: Radius.circular(isUser ? 4 : 16)),
+                          border: isUser
+                              ? null
+                              : Border.all(color: Colors.black12)),
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(isUser ? 'You' : 'LUMA',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: isUser ? lime : Colors.black54)),
+                            const SizedBox(height: 4),
+                            Text(message.content,
+                                style: TextStyle(
+                                    height: 1.4, color: isUser ? cream : ink))
+                          ])))));
+    }).toList();
     return Scaffold(
       appBar: AppBar(title: Text(sermon.title), actions: [
         IconButton(
@@ -1450,8 +1549,35 @@ class _BibleReaderState extends State<BibleReader> {
                           onChanged: (value) =>
                               setState(() => chapter = value ?? 1))),
                   const SizedBox(width: 12),
-                  FilledButton(onPressed: read, child: const Text('Read'))
+                  FilledButton(
+                      onPressed: book == null || busy ? null : read,
+                      child: const Text('Read'))
                 ]),
+                if (book != null) ...[
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    TextButton.icon(
+                        onPressed: chapter > 1 && !busy
+                            ? () {
+                                setState(() => chapter--);
+                                read();
+                              }
+                            : null,
+                        icon: const Icon(Icons.chevron_left),
+                        label: const Text('Previous')),
+                    Text('Chapter $chapter',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    TextButton.icon(
+                        onPressed: chapter < (book?.chapters ?? 1) && !busy
+                            ? () {
+                                setState(() => chapter++);
+                                read();
+                              }
+                            : null,
+                        icon: const Icon(Icons.chevron_right),
+                        label: const Text('Next'))
+                  ])
+                ],
                 const SizedBox(height: 12),
                 TextField(
                     controller: search,
@@ -1587,8 +1713,29 @@ class _StudyHubState extends State<StudyHub> {
                       setState(() => depth = value.first)),
               const SizedBox(height: 16),
               if (generationError != null)
-                Text(generationError!,
-                    style: const TextStyle(color: Colors.red)),
+                Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                  child: Text(generationError!,
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onErrorContainer))),
+                              IconButton(
+                                  tooltip: 'Retry',
+                                  onPressed: generating ? null : generate,
+                                  icon: const Icon(Icons.refresh))
+                            ]))),
               FilledButton.icon(
                   onPressed: generating ? null : generate,
                   icon: const Icon(Icons.auto_awesome),
@@ -2213,6 +2360,8 @@ class _AccountSettingsState extends State<AccountSettings> {
         FilledButton(
             onPressed: busy ? null : save, child: const Text('Save profile')),
         const SizedBox(height: 20),
+        const Text('Security',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text('Change password'),
@@ -2253,7 +2402,7 @@ class _AccountSettingsState extends State<AccountSettings> {
           Card(
               child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text('Usage: ${entitlements!.usage}'))),
+                  child: UsageOverview(usage: entitlements!.usage))),
         OutlinedButton(
             onPressed: () => subscriptions.restore(),
             child: const Text('Restore purchases')),
@@ -2261,7 +2410,7 @@ class _AccountSettingsState extends State<AccountSettings> {
           ...subscriptions.products.map((product) => FilledButton(
               onPressed: () => subscriptions.buy(product),
               child: Text('Subscribe · ${product.price}'))),
-        Text('Purchase status: ${purchaseStatus.state.name}'),
+        Text('Purchase status: ${prettyStatus(purchaseStatus.state.name)}'),
         const SizedBox(height: 20),
         const Text('Feedback',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),

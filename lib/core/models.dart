@@ -152,8 +152,25 @@ class SermonMessage {
   final List<dynamic> sources;
   factory SermonMessage.fromJson(Map<String, dynamic> j) => SermonMessage(
       role: textValue(j['role']),
-      content: textValue(j['content']),
+      content: displayMessageText(textValue(j['content'])),
       sources: listValue(j['sources']));
+}
+
+/// Repairs legacy URL-encoded API records without changing ordinary literal
+/// percent text typed by a user.
+String displayMessageText(String value) {
+  if (!RegExp(r'%[0-9a-fA-F]{2}').hasMatch(value) ||
+      value.contains(RegExp(r'\s'))) {
+    return value;
+  }
+  try {
+    final decoded = Uri.decodeComponent(value);
+    return decoded == value || !decoded.contains(RegExp(r'[\s.,?!]'))
+        ? value
+        : decoded;
+  } on FormatException {
+    return value;
+  }
 }
 
 class Devotional {

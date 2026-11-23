@@ -97,6 +97,12 @@ void main() {
     expect(study.content, contains('application: [Trust]'));
   });
 
+  test('decodes legacy URL-encoded sermon messages without altering literals', () {
+    expect(displayMessageText('What%20is%20this%3F'), 'What is this?');
+    expect(displayMessageText('Use 100%20carefully'), 'Use 100%20carefully');
+    expect(displayMessageText('What is this?'), 'What is this?');
+  });
+
   test('round-trips notification preferences using the mobile contract', () {
     final preferences = NotificationPreferences.fromJson({
       'enabled': true,
