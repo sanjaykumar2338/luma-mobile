@@ -16,10 +16,11 @@ import 'core/config.dart';
 import 'core/models.dart';
 import 'core/push_notifications.dart';
 import 'core/subscriptions.dart';
+import 'ui/luma_design.dart';
 
-const ink = Color(0xFF171717);
-const cream = Color(0xFFF5F1E8);
-const lime = Color(0xFFC8F500);
+const ink = lumaInk;
+const cream = lumaCream;
+const lime = lumaLime;
 
 void main() => runApp(const LumaApp());
 
@@ -189,13 +190,7 @@ class _LumaAppState extends State<LumaApp> {
         navigatorKey: navigatorKey,
         debugShowCheckedModeBanner: false,
         title: 'LUMA',
-        theme: ThemeData(
-          useMaterial3: true,
-          scaffoldBackgroundColor: cream,
-          colorScheme: ColorScheme.fromSeed(seedColor: lime),
-          inputDecorationTheme:
-              const InputDecorationTheme(border: OutlineInputBorder()),
-        ),
+        theme: lumaTheme(),
         home: auth.loading
             ? const SplashScreen()
             : auth.isAuthenticated
@@ -212,12 +207,7 @@ class BrandMark extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Image.asset(
-        'assets/logo-mark.png',
-        width: size,
-        height: size,
-        color: dark ? cream : null,
-      );
+  Widget build(BuildContext context) => LumaMark(dark: dark, size: size);
 }
 
 class SplashScreen extends StatelessWidget {
@@ -250,55 +240,97 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: ink,
+        backgroundColor: cream,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Spacer(),
-                const BrandMark(dark: true),
-                const SizedBox(height: 28),
-                const Text('Make space for a deeper faith.',
-                    style: TextStyle(
-                        color: cream,
-                        fontSize: 38,
-                        height: 1.03,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 16),
-                const Text(
-                    'Study Scripture, reflect on sermons, and build a rhythm that lasts.',
-                    style: TextStyle(
-                        color: Colors.white70, fontSize: 17, height: 1.45)),
-                const Spacer(),
-                FilledButton(
-                  onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => AuthScreen(auth: auth))),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: lime,
-                      foregroundColor: ink,
-                      minimumSize: const Size.fromHeight(54)),
-                  child: const Text('Get started',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-                const SizedBox(height: 12),
-                Center(
-                  child: TextButton(
+          child: Stack(children: [
+            Positioned(
+                right: -150,
+                top: -20,
+                child: Container(
+                    width: 430,
+                    height: 430,
+                    decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                            colors: [lumaLimeSoft, Color(0x00E8F8B4)])))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    BrandMark(size: 48),
+                    const SizedBox(width: 12),
+                    const Text('LUMA',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 4)),
+                  ]),
+                  const Spacer(),
+                  const LumaTag('From Sunday to everyday'),
+                  const SizedBox(height: 22),
+                  const Text("Don't just hear\nthe Word.",
+                      style: TextStyle(
+                          color: ink,
+                          fontSize: 44,
+                          height: 1.08,
+                          letterSpacing: -1.6,
+                          fontWeight: FontWeight.w700)),
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    color: lime,
+                    child: const Text('Live it.',
+                        style: TextStyle(
+                            color: ink,
+                            fontSize: 44,
+                            height: 1.04,
+                            letterSpacing: -1.6,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                      'Turn sermons into clear notes, explore the Scriptures behind the message, and take practical steps to live what you learn.',
+                      style: TextStyle(
+                          color: lumaMuted, fontSize: 17, height: 1.52)),
+                  const Spacer(),
+                  FilledButton(
                     onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                AuthScreen(auth: auth, login: true))),
-                    child: const Text('I already have an account',
-                        style: TextStyle(color: cream)),
+                            builder: (_) => AuthScreen(auth: auth))),
+                    child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text('Create your free account'),
+                          SizedBox(width: 10),
+                          Icon(Icons.arrow_forward, size: 24)
+                        ]),
                   ),
-                ),
-              ],
-            ),
-          ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  AuthScreen(auth: auth, login: true))),
+                      child: const Text('I already have an account'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Center(
+                    child: Text(
+                        'Sermon study is available now. More tools are on the way.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: lumaMuted, fontSize: 13)),
+                  )
+                ],
+              ),
+            )
+          ]),
         ),
       );
 }
@@ -484,40 +516,27 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int index = 0;
 
+  void select(int value) {
+    if (value == 2) {
+      Navigator.push(context,
+          MaterialPageRoute(builder: (_) => SubmitSermon(api: widget.api)));
+      return;
+    }
+    setState(() => index = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
       Dashboard(auth: widget.auth, api: widget.api),
       SermonLibrary(api: widget.api),
-      BibleReader(api: widget.api),
-      StudyHub(api: widget.api),
+      const SizedBox.shrink(),
+      ReadingPlans(api: widget.api),
       MoreHub(auth: widget.auth, api: widget.api),
     ];
     return Scaffold(
-      body: pages[index],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home'),
-          NavigationDestination(
-              icon: Icon(Icons.library_music_outlined),
-              selectedIcon: Icon(Icons.library_music),
-              label: 'Sermons'),
-          NavigationDestination(
-              icon: Icon(Icons.menu_book_outlined),
-              selectedIcon: Icon(Icons.menu_book),
-              label: 'Bible'),
-          NavigationDestination(
-              icon: Icon(Icons.auto_awesome_outlined),
-              selectedIcon: Icon(Icons.auto_awesome),
-              label: 'Study'),
-          NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
-        ],
-      ),
+      body: IndexedStack(index: index, children: pages),
+      bottomNavigationBar: LumaBottomBar(index: index, onChanged: select),
     );
   }
 }
@@ -545,7 +564,7 @@ class PageFrame extends StatelessWidget {
                 onRefresh: onRefresh ?? () async {},
                 child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
                     child: child))),
       );
 }
@@ -581,7 +600,10 @@ class EmptyState extends StatelessWidget {
 
 class RetryState extends StatelessWidget {
   const RetryState(
-      {required this.title, required this.message, required this.onRetry, super.key});
+      {required this.title,
+      required this.message,
+      required this.onRetry,
+      super.key});
   final String title;
   final String message;
   final Future<void> Function() onRetry;
@@ -679,32 +701,50 @@ class _DashboardState extends State<Dashboard> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                          color: ink, borderRadius: BorderRadius.circular(24)),
+                    LumaDarkCard(
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('TODAY',
-                                style: TextStyle(
-                                    color: lime,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 2)),
-                            const SizedBox(height: 10),
+                            Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: const [
+                                  Row(children: [
+                                    Icon(Icons.circle, size: 10, color: lime),
+                                    SizedBox(width: 8),
+                                    Text('Today\'s next step',
+                                        style: TextStyle(color: lumaMuted2))
+                                  ]),
+                                  LumaTag('Reflection', dark: true)
+                                ]),
+                            const SizedBox(height: 22),
                             Text(
                                 devotional?.title ??
                                     'Start with a moment of reflection.',
                                 style: const TextStyle(
                                     color: cream,
-                                    fontSize: 24,
+                                    fontSize: 27,
+                                    height: 1.15,
                                     fontWeight: FontWeight.w700)),
                             const SizedBox(height: 8),
                             Text(
                                 devotional?.reference ??
                                     'Daily Scripture and thoughtful tools are ready for you.',
-                                style: const TextStyle(color: Colors.white70)),
+                                style: const TextStyle(color: lumaMuted2)),
+                            const SizedBox(height: 18),
+                            const LumaProgressBar(value: .6),
+                            const SizedBox(height: 8),
+                            const Text('3 of 5 study steps complete',
+                                style: TextStyle(color: lumaMuted2)),
+                            const SizedBox(height: 14),
+                            LumaAccentButton(
+                              label: 'Continue study',
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          Devotionals(api: widget.api))),
+                            ),
                           ]),
                     ),
                     const SizedBox(height: 20),
@@ -718,15 +758,17 @@ class _DashboardState extends State<Dashboard> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Text('Membership',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w700)),
-                          Text(membershipLabel(entitlements
-                                                  ?.membership.plan ??
-                                              'free'))
+                                        const LumaEyebrow('Membership'),
+                                        Text(
+                                            membershipLabel(
+                                                entitlements?.membership.plan ??
+                                                    'free'),
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w700))
                                       ]),
-                                  Text(membershipLabel(entitlements?.membership.status ??
-                                      'Status unavailable')),
+                                  Text(membershipLabel(
+                                      entitlements?.membership.status ??
+                                          'Status unavailable')),
                                   const SizedBox(height: 14),
                                   const Text('Monthly usage',
                                       style: TextStyle(
@@ -809,8 +851,8 @@ class UsageOverview extends StatelessWidget {
     };
     final entries = features.entries
         .where((entry) => entry.value is Map)
-        .map((entry) => MapEntry(entry.key,
-            (entry.value as Map).cast<String, dynamic>()))
+        .map((entry) =>
+            MapEntry(entry.key, (entry.value as Map).cast<String, dynamic>()))
         .where((entry) =>
             entry.value['used'] != null && entry.value['limit'] != null)
         .toList();
@@ -822,7 +864,8 @@ class UsageOverview extends StatelessWidget {
       final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
       return Padding(
           padding: const EdgeInsets.only(bottom: 9),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text(labels[entry.key] ?? prettyStatus(entry.key)),
               Text('$used/$limit',
@@ -866,8 +909,8 @@ class _SermonLibraryState extends State<SermonLibrary> {
       final query = <String, String>{'page': '$page', 'per_page': '12'};
       if (search.text.trim().isNotEmpty) query['search'] = search.text.trim();
       if (statusFilter != null) query['status'] = statusFilter!;
-      final response = await widget.api.request('/sermons',
-          auth: true, query: query);
+      final response =
+          await widget.api.request('/sermons', auth: true, query: query);
       if (mounted) {
         setState(() {
           sermons = mapsOf(response).map(Sermon.fromJson).toList();
@@ -940,12 +983,17 @@ class _SermonLibraryState extends State<SermonLibrary> {
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String?>(
                       value: statusFilter,
-                      decoration: const InputDecoration(labelText: 'Filter by status'),
+                      decoration:
+                          const InputDecoration(labelText: 'Filter by status'),
                       items: const [
-                        DropdownMenuItem<String?>(value: null, child: Text('All sermons')),
-                        DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                        DropdownMenuItem(value: 'failed', child: Text('Needs attention')),
-                        DropdownMenuItem(value: 'analyzing', child: Text('Processing')),
+                        DropdownMenuItem<String?>(
+                            value: null, child: Text('All sermons')),
+                        DropdownMenuItem(
+                            value: 'completed', child: Text('Completed')),
+                        DropdownMenuItem(
+                            value: 'failed', child: Text('Needs attention')),
+                        DropdownMenuItem(
+                            value: 'analyzing', child: Text('Processing')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -963,27 +1011,25 @@ class _SermonLibraryState extends State<SermonLibrary> {
                   else
                     ...items,
                   if (sermons.isNotEmpty)
-                    Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                              onPressed: page > 1
-                                  ? () {
-                                      page--;
-                                      load();
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.chevron_left)),
-                          Text('Page $page'),
-                          IconButton(
-                              onPressed: sermons.length == 12
-                                  ? () {
-                                      page++;
-                                      load();
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.chevron_right))
-                        ])
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      IconButton(
+                          onPressed: page > 1
+                              ? () {
+                                  page--;
+                                  load();
+                                }
+                              : null,
+                          icon: const Icon(Icons.chevron_left)),
+                      Text('Page $page'),
+                      IconButton(
+                          onPressed: sermons.length == 12
+                              ? () {
+                                  page++;
+                                  load();
+                                }
+                              : null,
+                          icon: const Icon(Icons.chevron_right))
+                    ])
                 ]),
     );
   }
@@ -1143,16 +1189,21 @@ class _SermonDetailState extends State<SermonDetail> {
   Future<void> createDevotional() async {
     setState(() => busy = true);
     try {
-      final response = await widget.api.request('/sermons/${sermon.id}/devotional',
-          method: 'POST', auth: true);
+      final response = await widget.api.request(
+          '/sermons/${sermon.id}/devotional',
+          method: 'POST',
+          auth: true);
       final data = dataOf(response);
       if (data is! Map) {
         throw const ApiException('The devotional response was invalid.');
       }
       if (!mounted) return;
-      await Navigator.push(context, MaterialPageRoute(
-          builder: (_) => DevotionalDetail(
-              devotional: Devotional.fromJson(data.cast<String, dynamic>()))));
+      await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => DevotionalDetail(
+                  devotional:
+                      Devotional.fromJson(data.cast<String, dynamic>()))));
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     } finally {
@@ -1371,15 +1422,14 @@ class _SermonDetailState extends State<SermonDetail> {
                             const SizedBox(height: 4),
                             Text(message.content,
                                 style: TextStyle(
-                                    height: 1.4, color: isUser ? cream : ink))
-                            ,
+                                    height: 1.4, color: isUser ? cream : ink)),
                             Align(
                                 alignment: Alignment.centerRight,
                                 child: IconButton(
                                     tooltip: 'Copy message',
                                     visualDensity: VisualDensity.compact,
-                                    onPressed: () => copyText(context,
-                                        message.content, 'Message'),
+                                    onPressed: () => copyText(
+                                        context, message.content, 'Message'),
                                     icon: Icon(Icons.copy_outlined,
                                         size: 17,
                                         color: isUser
@@ -1589,7 +1639,9 @@ class _BibleReaderState extends State<BibleReader> {
             context: context,
             builder: (_) => const Padding(
                 padding: EdgeInsets.all(24),
-                child: EmptyState(title: 'No results', message: 'Try another Scripture search.')));
+                child: EmptyState(
+                    title: 'No results',
+                    message: 'Try another Scripture search.')));
         return;
       }
       showModalBottomSheet(
@@ -1651,115 +1703,130 @@ class _BibleReaderState extends State<BibleReader> {
               icon: const Icon(Icons.refresh))
         ]),
         onRefresh: load,
-          child: busy && books.isEmpty
+        child: busy && books.isEmpty
             ? const Loading()
             : loadError != null && books.isEmpty
                 ? RetryState(
                     title: 'Bible unavailable',
                     message: loadError!,
                     onRetry: load)
-            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (loadError != null && books.isNotEmpty)
-                  Text(loadError!, style: const TextStyle(color: Colors.red)),
-                DropdownButtonFormField<String>(
-                    value: translation,
-                    decoration: const InputDecoration(labelText: 'Translation'),
-                    items: const [
-                      DropdownMenuItem(value: 'WEB', child: Text('WEB')),
-                      DropdownMenuItem(value: 'KJV', child: Text('KJV')),
-                      DropdownMenuItem(value: 'ASV', child: Text('ASV')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        translation = value;
-                        book = null;
-                        passage = null;
-                        busy = true;
-                      });
-                      load();
-                    }),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<BibleBook>(
-                    value: book,
-                    decoration: const InputDecoration(labelText: 'Book'),
-                    items: books
-                        .map((item) => DropdownMenuItem(
-                            value: item, child: Text(item.name)))
-                        .toList(),
-                    onChanged: (value) => setState(() {
-                          book = value;
-                          chapter = 1;
-                        })),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                      child: DropdownButtonFormField<int>(
-                          value: chapter,
-                          decoration:
-                              const InputDecoration(labelText: 'Chapter'),
-                          items: List.generate(
-                              math.max(1, book?.chapters ?? 1),
-                              (index) => DropdownMenuItem(
-                                  value: index + 1,
-                                  child: Text('${index + 1}'))),
-                          onChanged: (value) =>
-                              setState(() => chapter = value ?? 1))),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                      onPressed: book == null || busy ? null : read,
-                      child: const Text('Read'))
-                ]),
-                if (book != null) ...[
-                  const SizedBox(height: 8),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    TextButton.icon(
-                        onPressed: chapter > 1 && !busy
-                            ? () {
-                                setState(() => chapter--);
-                                read();
-                              }
-                            : null,
-                        icon: const Icon(Icons.chevron_left),
-                        label: const Text('Previous')),
-                    Text('Chapter $chapter',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    TextButton.icon(
-                        onPressed: chapter < (book?.chapters ?? 1) && !busy
-                            ? () {
-                                setState(() => chapter++);
-                                read();
-                              }
-                            : null,
-                        icon: const Icon(Icons.chevron_right),
-                        label: const Text('Next'))
-                  ])
-                ],
-                const SizedBox(height: 12),
-                TextField(
-                    controller: search,
-                    decoration: InputDecoration(
-                        labelText: 'Search Scripture',
-                         suffixIcon: IconButton(
-                             onPressed: searching ? null : searchBible,
-                            icon: const Icon(Icons.search)))),
-                if (passage != null) ...[
-                  const SizedBox(height: 24),
-                  Text(passage!.reference,
-                      style: const TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  if (passage!.verses.isNotEmpty)
-                    ...passage!.verses.whereType<Map>().map((verse) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: SelectableText(
-                            '${verse['number'] ?? ''} ${verse['text'] ?? ''}',
-                            style: const TextStyle(fontSize: 18, height: 1.5))))
-                  else
-                    SelectableText(passage!.text,
-                        style: const TextStyle(fontSize: 18, height: 1.5))
-                ],
-              ]),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                        if (loadError != null && books.isNotEmpty)
+                          Text(loadError!,
+                              style: const TextStyle(color: Colors.red)),
+                        DropdownButtonFormField<String>(
+                            value: translation,
+                            decoration:
+                                const InputDecoration(labelText: 'Translation'),
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'WEB', child: Text('WEB')),
+                              DropdownMenuItem(
+                                  value: 'KJV', child: Text('KJV')),
+                              DropdownMenuItem(
+                                  value: 'ASV', child: Text('ASV')),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() {
+                                translation = value;
+                                book = null;
+                                passage = null;
+                                busy = true;
+                              });
+                              load();
+                            }),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<BibleBook>(
+                            value: book,
+                            decoration:
+                                const InputDecoration(labelText: 'Book'),
+                            items: books
+                                .map((item) => DropdownMenuItem(
+                                    value: item, child: Text(item.name)))
+                                .toList(),
+                            onChanged: (value) => setState(() {
+                                  book = value;
+                                  chapter = 1;
+                                })),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                              child: DropdownButtonFormField<int>(
+                                  value: chapter,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Chapter'),
+                                  items: List.generate(
+                                      math.max(1, book?.chapters ?? 1),
+                                      (index) => DropdownMenuItem(
+                                          value: index + 1,
+                                          child: Text('${index + 1}'))),
+                                  onChanged: (value) =>
+                                      setState(() => chapter = value ?? 1))),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                              onPressed: book == null || busy ? null : read,
+                              child: const Text('Read'))
+                        ]),
+                        if (book != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                TextButton.icon(
+                                    onPressed: chapter > 1 && !busy
+                                        ? () {
+                                            setState(() => chapter--);
+                                            read();
+                                          }
+                                        : null,
+                                    icon: const Icon(Icons.chevron_left),
+                                    label: const Text('Previous')),
+                                Text('Chapter $chapter',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
+                                TextButton.icon(
+                                    onPressed:
+                                        chapter < (book?.chapters ?? 1) && !busy
+                                            ? () {
+                                                setState(() => chapter++);
+                                                read();
+                                              }
+                                            : null,
+                                    icon: const Icon(Icons.chevron_right),
+                                    label: const Text('Next'))
+                              ])
+                        ],
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: search,
+                            decoration: InputDecoration(
+                                labelText: 'Search Scripture',
+                                suffixIcon: IconButton(
+                                    onPressed: searching ? null : searchBible,
+                                    icon: const Icon(Icons.search)))),
+                        if (passage != null) ...[
+                          const SizedBox(height: 24),
+                          Text(passage!.reference,
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 8),
+                          if (passage!.verses.isNotEmpty)
+                            ...passage!.verses.whereType<Map>().map((verse) =>
+                                Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: SelectableText(
+                                        '${verse['number'] ?? ''} ${verse['text'] ?? ''}',
+                                        style: const TextStyle(
+                                            fontSize: 18, height: 1.5))))
+                          else
+                            SelectableText(passage!.text,
+                                style:
+                                    const TextStyle(fontSize: 18, height: 1.5))
+                        ],
+                      ]),
       );
 }
 
@@ -1849,7 +1916,7 @@ class _StudyHubState extends State<StudyHub> {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-        title: 'Bible Study',
+      title: 'Bible Study',
       onRefresh: load,
       child: busy
           ? const Loading()
@@ -1925,11 +1992,29 @@ class StudyDetail extends StatelessWidget {
             onPressed: () => copyText(context, study.content, 'Study'),
             icon: const Icon(Icons.copy_outlined))
       ]),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
-        Text(study.reference, style: const TextStyle(color: Colors.black54)),
-        const SizedBox(height: 16),
-        SelectableText(study.content,
-            style: const TextStyle(fontSize: 17, height: 1.5))
+      body: ListView(padding: const EdgeInsets.all(24), children: [
+        const LumaTag('Saved study'),
+        const SizedBox(height: 12),
+        Text(study.reference,
+            style: const TextStyle(
+                color: lumaMuted, fontSize: 15, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 20),
+        LumaDarkCard(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const LumaEyebrow('Study notes', dark: true),
+          const SizedBox(height: 14),
+          SelectableText(study.content,
+              style: const TextStyle(color: cream, fontSize: 17, height: 1.55))
+        ])),
+        if (study.notes.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          const LumaEyebrow('Personal notes'),
+          const SizedBox(height: 8),
+          Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(18), child: Text(study.notes)))
+        ]
       ]));
 }
 
@@ -1939,8 +2024,20 @@ class MoreHub extends StatelessWidget {
   final ApiClient api;
   @override
   Widget build(BuildContext context) => PageFrame(
-       title: 'More',
+      title: 'More',
       child: Column(children: [
+        ListTile(
+            leading: const Icon(Icons.menu_book_outlined),
+            title: const Text('Bible reader'),
+            subtitle: const Text('Read and search Scripture'),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => BibleReader(api: api)))),
+        ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Bible Study'),
+            subtitle: const Text('Explore a passage in depth'),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => StudyHub(api: api)))),
         ListTile(
             leading: const Icon(Icons.wb_sunny_outlined),
             title: const Text('Daily devotionals'),
@@ -2021,27 +2118,29 @@ class _DevotionalsState extends State<Devotionals> {
                   title: 'Devotionals unavailable',
                   message: error!,
                   onRetry: load)
-          : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (today != null)
-                ListTile(
-                    title: Text(today!.title),
-                    subtitle: Text(today!.reference),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) =>
-                                DevotionalDetail(devotional: today!)))),
-              const SizedBox(height: 16),
-              const Text('Saved history',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              ...history.map((item) => ListTile(
-                  title: Text(item.title),
-                  subtitle: Text(item.reference),
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => DevotionalDetail(devotional: item)))))
-            ]));
+              : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (today != null)
+                    ListTile(
+                        title: Text(today!.title),
+                        subtitle: Text(today!.reference),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    DevotionalDetail(devotional: today!)))),
+                  const SizedBox(height: 16),
+                  const Text('Saved history',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  ...history.map((item) => ListTile(
+                      title: Text(item.title),
+                      subtitle: Text(item.reference),
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  DevotionalDetail(devotional: item)))))
+                ]));
 }
 
 class DevotionalDetail extends StatelessWidget {
@@ -2058,18 +2157,39 @@ class DevotionalDetail extends StatelessWidget {
                 'Devotional'),
             icon: const Icon(Icons.copy_outlined))
       ]),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
+      body: ListView(padding: const EdgeInsets.all(24), children: [
+        const LumaEyebrow('Today\'s devotional'),
+        const SizedBox(height: 10),
         Text(devotional.reference,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 16),
+        Card(
+            child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: SelectableText(devotional.text,
+                    style: const TextStyle(fontSize: 18, height: 1.5)))),
+        const SizedBox(height: 24),
+        const LumaEyebrow('Reflection'),
         const SizedBox(height: 8),
-        SelectableText(devotional.text,
-            style: const TextStyle(fontSize: 18, height: 1.5)),
-        const SizedBox(height: 18),
-        Text(devotional.reflection),
-        const SizedBox(height: 12),
-        Text(devotional.application),
-        const SizedBox(height: 12),
-        Text(devotional.prayer)
+        Text(devotional.reflection,
+            style: const TextStyle(fontSize: 16, height: 1.5)),
+        const SizedBox(height: 24),
+        const LumaEyebrow('Practical application'),
+        const SizedBox(height: 8),
+        Card(
+            child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Text(devotional.application,
+                    style: const TextStyle(fontSize: 16, height: 1.5)))),
+        const SizedBox(height: 24),
+        const LumaEyebrow('Prayer'),
+        const SizedBox(height: 8),
+        Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+                color: lumaLimeSoft, borderRadius: BorderRadius.circular(20)),
+            child: Text(devotional.prayer,
+                style: const TextStyle(fontSize: 16, height: 1.5)))
       ]));
 }
 
@@ -2113,33 +2233,32 @@ class _ReadingPlansState extends State<ReadingPlans> {
   @override
   @override
   Widget build(BuildContext context) {
-    final items = plans
-        .map((plan) {
-          final progress = plan.days.isEmpty
-              ? 0.0
-              : plan.completedDayIds.length / plan.days.length;
-          return Card(
-              child: ListTile(
-                  title: Text(plan.title),
-                  subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${plan.days.length} days · ${plan.description}'),
-                        if (plan.enrollmentId != null) ...[
-                          const SizedBox(height: 6),
-                          LinearProgressIndicator(value: progress),
-                          const SizedBox(height: 3),
-                          Text('${plan.completedDayIds.length}/${plan.days.length} days complete')
-                        ]
-                      ]),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) =>
-                              ReadingPlanDetail(api: widget.api, plan: plan)))));
-        })
-        .toList();
+    final items = plans.map((plan) {
+      final progress = plan.days.isEmpty
+          ? 0.0
+          : plan.completedDayIds.length / plan.days.length;
+      return Card(
+          child: ListTile(
+              title: Text(plan.title),
+              subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${plan.days.length} days · ${plan.description}'),
+                    if (plan.enrollmentId != null) ...[
+                      const SizedBox(height: 6),
+                      LinearProgressIndicator(value: progress),
+                      const SizedBox(height: 3),
+                      Text(
+                          '${plan.completedDayIds.length}/${plan.days.length} days complete')
+                    ]
+                  ]),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          ReadingPlanDetail(api: widget.api, plan: plan)))));
+    }).toList();
     return PageFrame(
         title: 'Reading plans',
         onRefresh: load,
@@ -2150,11 +2269,11 @@ class _ReadingPlansState extends State<ReadingPlans> {
                     title: 'Reading plans unavailable',
                     message: error!,
                     onRetry: load)
-            : plans.isEmpty
-                ? const EmptyState(
-                    title: 'No plans available',
-                    message: 'Reading plans will appear when published.')
-                : Column(children: items));
+                : plans.isEmpty
+                    ? const EmptyState(
+                        title: 'No plans available',
+                        message: 'Reading plans will appear when published.')
+                    : Column(children: items));
   }
 }
 
@@ -2292,8 +2411,8 @@ class _MembershipScreenState extends State<MembershipScreen> {
     try {
       Map<String, dynamic> response;
       try {
-        response = await widget.api
-            .request('/mobile/purchases/status', auth: true);
+        response =
+            await widget.api.request('/mobile/purchases/status', auth: true);
       } on ApiException {
         response = await widget.api.request('/entitlements', auth: true);
       }
@@ -2321,8 +2440,8 @@ class _MembershipScreenState extends State<MembershipScreen> {
         : 'https://play.google.com/store/account/subscriptions';
     if (entitlements?.membership.billingEnabled == true) {
       try {
-        final response =
-            await widget.api.request('/billing/portal', method: 'POST', auth: true);
+        final response = await widget.api
+            .request('/billing/portal', method: 'POST', auth: true);
         final data = dataOf(response);
         final url = data is Map ? data['url']?.toString() : null;
         if (url != null &&
@@ -2362,7 +2481,8 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       const Text('Free',
                           style: TextStyle(
                               fontSize: 22, fontWeight: FontWeight.w700)),
-                      const Text('Core Bible reading and limited advanced features.'),
+                      const Text(
+                          'Core Bible reading and limited advanced features.'),
                       const SizedBox(height: 18),
                       const Text('Premium',
                           style: TextStyle(
@@ -2383,13 +2503,13 @@ class _MembershipScreenState extends State<MembershipScreen> {
                           child: Text(
                               'Subscribe · ${product.title} ${product.price}'))),
                       OutlinedButton(
-                          onPressed: purchaseStatus.state ==
-                                  SubscriptionState.pending
-                              ? null
-                              : () async {
-                                  await subscriptions.restore();
-                                  await load();
-                                },
+                          onPressed:
+                              purchaseStatus.state == SubscriptionState.pending
+                                  ? null
+                                  : () async {
+                                      await subscriptions.restore();
+                                      await load();
+                                    },
                           child: const Text('Restore purchases')),
                       if (purchaseStatus.message != null)
                         Text(purchaseStatus.message!,
