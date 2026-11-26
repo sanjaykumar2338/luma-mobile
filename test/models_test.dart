@@ -14,11 +14,15 @@ void main() {
       'plan': 'premium',
       'status': 'active',
       'renews_or_ends_at': null,
-      'billing_enabled': true
+      'billing_enabled': true,
+      'source': 'mobile_purchase',
+      'canceled': true,
     });
     expect(user.name, 'Ada');
     expect(membership.plan, 'premium');
     expect(membership.billingEnabled, isTrue);
+    expect(membership.source, 'mobile_purchase');
+    expect(membership.canceled, isTrue);
   });
 
   test('parses sermon notes and devotional resources', () {
@@ -61,8 +65,14 @@ void main() {
       'id': 1,
       'title': 'Seven days',
       'description': 'A beginning',
+      'complete_canon': true,
       'days': [
-        {'day_number': 1}
+        {
+          'day_number': 1,
+          'readings': [
+            {'book': 'Genesis', 'chapter': 1, 'translation': 'WEB'}
+          ]
+        }
       ],
       'enrollment': {
         'id': 22,
@@ -75,6 +85,13 @@ void main() {
     expect(plan.days, hasLength(1));
     expect(plan.enrollmentId, 22);
     expect(plan.completedDayIds, [4, 5]);
+    expect(plan.completeCanon, isTrue);
+    final assignment = ReadingAssignment.fromJson(
+        (plan.days.single as Map)['readings'] is List
+            ? ((plan.days.single as Map)['readings'] as List).single
+            : const {});
+    expect(assignment.reference, 'Genesis 1');
+    expect(assignment.translation, 'WEB');
   });
 
   test('uses the API Bible book id and chapter_count fields', () {
@@ -103,7 +120,8 @@ void main() {
     expect(study.content, contains('application: [Trust]'));
   });
 
-  test('decodes legacy URL-encoded sermon messages without altering literals', () {
+  test('decodes legacy URL-encoded sermon messages without altering literals',
+      () {
     expect(displayMessageText('What%20is%20this%3F'), 'What is this?');
     expect(displayMessageText('Use 100%20carefully'), 'Use 100%20carefully');
     expect(displayMessageText('What is this?'), 'What is this?');
@@ -115,6 +133,9 @@ void main() {
       'sermon_processing': false,
       'devotional_reminders': true,
       'subscription_updates': false,
+      'reading_plan_reminders': true,
+      'reminder_time': '07:30',
+      'timezone': 'Asia/Kolkata',
     });
 
     expect(preferences.toJson(), {
@@ -122,6 +143,9 @@ void main() {
       'sermon_processing': false,
       'devotional_reminders': true,
       'subscription_updates': false,
+      'reading_plan_reminders': true,
+      'reminder_time': '07:30',
+      'timezone': 'Asia/Kolkata',
     });
   });
 }

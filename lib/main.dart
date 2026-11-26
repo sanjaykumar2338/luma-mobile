@@ -22,6 +22,37 @@ const ink = lumaInk;
 const cream = lumaCream;
 const lime = lumaLime;
 
+const reminderTimezones = [
+  'UTC',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Los_Angeles',
+  'Australia/Sydney',
+];
+
+String detectedTimezone() {
+  final offset = DateTime.now().timeZoneOffset;
+  if (offset == const Duration(hours: 5, minutes: 30)) return 'Asia/Kolkata';
+  if (offset == const Duration(hours: 4)) return 'Asia/Dubai';
+  if (offset == const Duration(hours: 8)) return 'Asia/Singapore';
+  if (offset == Duration.zero) return 'UTC';
+  return 'UTC';
+}
+
+String formatReminderTime(TimeOfDay time) =>
+    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+
+TimeOfDay parseReminderTime(String value) {
+  final parts = value.split(':');
+  final hour = parts.isNotEmpty ? int.tryParse(parts.first) ?? 8 : 8;
+  final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+  return TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59));
+}
+
 void main() => runApp(const LumaApp());
 
 dynamic dataOf(dynamic value) =>
@@ -1187,6 +1218,7 @@ class _SermonDetailState extends State<SermonDetail> {
   String? lastQuestion;
 
   Future<void> createDevotional() async {
+    if (busy) return;
     setState(() => busy = true);
     try {
       final response = await widget.api.request(
@@ -1541,8 +1573,11 @@ class _SermonDetailState extends State<SermonDetail> {
 }
 
 class BibleReader extends StatefulWidget {
-  const BibleReader({required this.api, super.key});
+  const BibleReader(
+      {required this.api, this.initialBook, this.initialChapter, super.key});
   final ApiClient api;
+  final String? initialBook;
+  final int? initialChapter;
   @override
   State<BibleReader> createState() => _BibleReaderState();
 }
@@ -1574,8 +1609,22 @@ class _BibleReaderState extends State<BibleReader> {
       final response = await widget.api.request('/bible/books',
           auth: true, query: {'translation': translation});
       if (mounted) {
+        final requested = widget.initialBook?.toLowerCase().trim();
+        final loadedBooks = mapsOf(response).map(BibleBook.fromJson).toList();
+        BibleBook? requestedBook;
+        if (requested != null && requested.isNotEmpty) {
+          for (final candidate in loadedBooks) {
+            if (candidate.slug.toLowerCase() == requested ||
+                candidate.name.toLowerCase() == requested) {
+              requestedBook = candidate;
+              break;
+            }
+          }
+        }
         setState(() {
-          books = mapsOf(response).map(BibleBook.fromJson).toList();
+          books = loadedBooks;
+          book = requestedBook;
+          chapter = widget.initialChapter ?? 1;
           busy = false;
           loadError = null;
         });
@@ -2244,6 +2293,10 @@ class _ReadingPlansState extends State<ReadingPlans> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('${plan.days.length} days · ${plan.description}'),
+                    if (plan.completeCanon)
+                      const Text('Complete canon • 66 books • 1,189 chapters',
+                          style: TextStyle(
+                              color: lumaMuted, fontWeight: FontWeight.w600)),
                     if (plan.enrollmentId != null) ...[
                       const SizedBox(height: 6),
                       LinearProgressIndicator(value: progress),
@@ -2338,6 +2391,13 @@ class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
       title: widget.plan.title,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.plan.description),
+        if (widget.plan.completeCanon) ...[
+          const SizedBox(height: 8),
+          const LumaTag('Complete canon'),
+          const SizedBox(height: 6),
+          const Text('Bible in 30 Days covers all 66 books and 1,189 chapters.',
+              style: TextStyle(color: lumaMuted)),
+        ],
         const SizedBox(height: 16),
         if (widget.plan.days.isNotEmpty)
           LinearProgressIndicator(
@@ -2355,14 +2415,46 @@ class _ReadingPlanDetailState extends State<ReadingPlanDetail> {
         ...widget.plan.days.whereType<Map>().map((raw) {
           final day = raw.cast<String, dynamic>();
           final id = day['id'] as int?;
-          return CheckboxListTile(
-              value: id != null && completed.contains(id),
-              onChanged:
-                  id == null ? null : (value) => toggle(day, value ?? false),
-              title:
-                  Text('Day ${day['day_number'] ?? ''}: ${day['title'] ?? ''}'),
-              subtitle: Text(
-                  '${day['scripture_reference'] ?? ''}\n${day['scripture_text'] ?? ''}'));
+          final assignments = listValue(day['readings'])
+              .map(ReadingAssignment.fromJson)
+              .where((assignment) => assignment.reference.isNotEmpty)
+              .toList();
+          return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: id != null && completed.contains(id),
+                            onChanged: id == null
+                                ? null
+                                : (value) => toggle(day, value ?? false),
+                            title: Text(
+                                'Day ${day['day_number'] ?? ''}: ${day['title'] ?? ''}')),
+                        if (assignments.isNotEmpty)
+                          ...assignments.map((assignment) => Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                  onPressed: assignment.book == null ||
+                                          assignment.chapter == null
+                                      ? null
+                                      : () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (_) => BibleReader(
+                                                  api: widget.api,
+                                                  initialBook: assignment.book,
+                                                  initialChapter:
+                                                      assignment.chapter))),
+                                  icon: const Icon(Icons.menu_book_outlined),
+                                  label: Text(
+                                      '${assignment.reference} • ${assignment.translation}'))))
+                        else if (day['scripture_reference'] != null)
+                          Text('${day['scripture_reference']}')
+                      ])));
         })
       ]));
 }
@@ -2473,6 +2565,16 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       if (entitlements?.membership.endsAt != null)
                         Text(
                             'Renews or ends: ${entitlements!.membership.endsAt}'),
+                      if (entitlements?.membership.canceled == true)
+                        const Text(
+                            'Cancellation scheduled; paid access remains active until the date above.',
+                            style: TextStyle(color: lumaMuted)),
+                      if (entitlements?.membership.source == 'manual')
+                        const Text('Premium access granted manually',
+                            style: TextStyle(color: lumaMuted)),
+                      if (entitlements?.membership.source == 'mobile_purchase')
+                        const Text('Premium access from a store purchase',
+                            style: TextStyle(color: lumaMuted)),
                       OutlinedButton.icon(
                           onPressed: manageSubscription,
                           icon: const Icon(Icons.open_in_new),
@@ -2551,6 +2653,7 @@ class _AccountSettingsState extends State<AccountSettings> {
   SubscriptionStatus purchaseStatus =
       const SubscriptionStatus(SubscriptionState.disabled);
   bool busy = false;
+  bool notificationsSaved = false;
 
   @override
   void initState() {
@@ -2589,8 +2692,11 @@ class _AccountSettingsState extends State<AccountSettings> {
               Entitlements.fromJson(statusData.cast<String, dynamic>());
         }
         if (preferenceData is Map) {
-          notifications = NotificationPreferences.fromJson(
+          final loaded = NotificationPreferences.fromJson(
               preferenceData.cast<String, dynamic>());
+          notifications =
+              loaded.copyWith(timezone: loaded.timezone ?? detectedTimezone());
+          notificationsSaved = true;
         }
       });
     } on ApiException catch (error) {
@@ -2603,12 +2709,23 @@ class _AccountSettingsState extends State<AccountSettings> {
       await widget.api.request('/mobile/notification-preferences',
           method: 'PUT', auth: true, body: notifications.toJson());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Notification preferences saved')));
+        setState(() => notificationsSaved = true);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Preferences saved. Delivery still depends on notification providers.')));
       }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
     }
+  }
+
+  Future<void> selectReminderTime() async {
+    final picked = await showTimePicker(
+        context: context,
+        initialTime: parseReminderTime(notifications.reminderTime));
+    if (picked == null || !mounted) return;
+    setState(() => notifications =
+        notifications.copyWith(reminderTime: formatReminderTime(picked)));
   }
 
   Future<void> deleteAccount() async {
@@ -2761,51 +2878,67 @@ class _AccountSettingsState extends State<AccountSettings> {
         const SizedBox(height: 20),
         const Text('Notifications',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+        const Text(
+            'Saved preferences control what LUMA requests. Actual push delivery requires configured FCM/APNs providers.',
+            style: TextStyle(color: lumaMuted)),
         SwitchListTile(
             title: const Text('Enable notifications'),
             value: notifications.enabled,
-            onChanged: (value) => setState(() => notifications =
-                NotificationPreferences(
-                    enabled: value,
-                    sermonProcessing: notifications.sermonProcessing,
-                    devotionalReminders: notifications.devotionalReminders,
-                    subscriptionUpdates: notifications.subscriptionUpdates))),
+            onChanged: (value) => setState(
+                () => notifications = notifications.copyWith(enabled: value))),
         SwitchListTile(
             title: const Text('Sermon processing updates'),
             value: notifications.sermonProcessing,
             onChanged: notifications.enabled
                 ? (value) => setState(() => notifications =
-                    NotificationPreferences(
-                        enabled: notifications.enabled,
-                        sermonProcessing: value,
-                        devotionalReminders: notifications.devotionalReminders,
-                        subscriptionUpdates: notifications.subscriptionUpdates))
+                    notifications.copyWith(sermonProcessing: value))
                 : null),
         SwitchListTile(
             title: const Text('Devotional reminders'),
             value: notifications.devotionalReminders,
             onChanged: notifications.enabled
                 ? (value) => setState(() => notifications =
-                    NotificationPreferences(
-                        enabled: notifications.enabled,
-                        sermonProcessing: notifications.sermonProcessing,
-                        devotionalReminders: value,
-                        subscriptionUpdates: notifications.subscriptionUpdates))
+                    notifications.copyWith(devotionalReminders: value))
+                : null),
+        SwitchListTile(
+            title: const Text('Reading plan reminders'),
+            value: notifications.readingPlanReminders,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications =
+                    notifications.copyWith(readingPlanReminders: value))
                 : null),
         SwitchListTile(
             title: const Text('Subscription updates'),
             value: notifications.subscriptionUpdates,
             onChanged: notifications.enabled
                 ? (value) => setState(() => notifications =
-                    NotificationPreferences(
-                        enabled: notifications.enabled,
-                        sermonProcessing: notifications.sermonProcessing,
-                        devotionalReminders: notifications.devotionalReminders,
-                        subscriptionUpdates: value))
+                    notifications.copyWith(subscriptionUpdates: value))
+                : null),
+        ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.schedule_outlined),
+            title: const Text('Reminder time'),
+            subtitle: Text(notifications.reminderTime),
+            enabled: notifications.enabled,
+            onTap: notifications.enabled ? selectReminderTime : null),
+        DropdownButtonFormField<String>(
+            value: reminderTimezones.contains(notifications.timezone)
+                ? notifications.timezone
+                : detectedTimezone(),
+            decoration: const InputDecoration(labelText: 'Reminder timezone'),
+            items: reminderTimezones
+                .map((zone) => DropdownMenuItem(value: zone, child: Text(zone)))
+                .toList(),
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications = notifications
+                    .copyWith(timezone: value ?? detectedTimezone()))
                 : null),
         OutlinedButton(
             onPressed: saveNotifications,
             child: const Text('Save notification preferences')),
+        if (notificationsSaved)
+          const Text('Saved to your LUMA account.',
+              style: TextStyle(color: lumaMuted)),
         const SizedBox(height: 20),
         TextButton(
             onPressed: busy ? null : deleteAccount,

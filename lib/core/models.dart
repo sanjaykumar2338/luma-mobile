@@ -25,17 +25,23 @@ class Membership {
       {required this.plan,
       required this.status,
       this.endsAt,
-      required this.billingEnabled});
+      required this.billingEnabled,
+      this.source,
+      this.canceled = false});
   final String plan;
   final String status;
   final String? endsAt;
   final bool billingEnabled;
+  final String? source;
+  final bool canceled;
 
   factory Membership.fromJson(Map<String, dynamic> json) => Membership(
         plan: json['plan'] as String? ?? 'free',
         status: json['status'] as String? ?? 'free',
         endsAt: json['renews_or_ends_at'] as String?,
         billingEnabled: json['billing_enabled'] as bool? ?? false,
+        source: json['source']?.toString(),
+        canceled: json['canceled'] as bool? ?? false,
       );
 }
 
@@ -44,11 +50,21 @@ class Entitlements {
   final Membership membership;
   final Map<String, dynamic> usage;
 
-  factory Entitlements.fromJson(Map<String, dynamic> json) => Entitlements(
-        membership: Membership.fromJson(
-            (json['membership'] as Map?)?.cast<String, dynamic>() ?? const {}),
-        usage: (json['usage'] as Map?)?.cast<String, dynamic>() ?? const {},
-      );
+  factory Entitlements.fromJson(Map<String, dynamic> json) {
+    final rawMembership =
+        (json['membership'] as Map?)?.cast<String, dynamic>() ??
+            <String, dynamic>{};
+    if (rawMembership['source'] == null && json['source'] != null) {
+      rawMembership['source'] = json['source'];
+    }
+    if (rawMembership['canceled'] == null && json['canceled'] != null) {
+      rawMembership['canceled'] = json['canceled'];
+    }
+    return Entitlements(
+      membership: Membership.fromJson(rawMembership),
+      usage: (json['usage'] as Map?)?.cast<String, dynamic>() ?? const {},
+    );
+  }
 }
 
 class NotificationPreferences {
@@ -57,11 +73,17 @@ class NotificationPreferences {
     this.sermonProcessing = true,
     this.devotionalReminders = true,
     this.subscriptionUpdates = true,
+    this.readingPlanReminders = true,
+    this.reminderTime = '08:00',
+    this.timezone,
   });
   final bool enabled;
   final bool sermonProcessing;
   final bool devotionalReminders;
   final bool subscriptionUpdates;
+  final bool readingPlanReminders;
+  final String reminderTime;
+  final String? timezone;
 
   factory NotificationPreferences.fromJson(Map<String, dynamic> json) =>
       NotificationPreferences(
@@ -69,6 +91,28 @@ class NotificationPreferences {
         sermonProcessing: json['sermon_processing'] as bool? ?? true,
         devotionalReminders: json['devotional_reminders'] as bool? ?? true,
         subscriptionUpdates: json['subscription_updates'] as bool? ?? true,
+        readingPlanReminders: json['reading_plan_reminders'] as bool? ?? true,
+        reminderTime: json['reminder_time']?.toString() ?? '08:00',
+        timezone: json['timezone']?.toString(),
+      );
+
+  NotificationPreferences copyWith({
+    bool? enabled,
+    bool? sermonProcessing,
+    bool? devotionalReminders,
+    bool? subscriptionUpdates,
+    bool? readingPlanReminders,
+    String? reminderTime,
+    String? timezone,
+  }) =>
+      NotificationPreferences(
+        enabled: enabled ?? this.enabled,
+        sermonProcessing: sermonProcessing ?? this.sermonProcessing,
+        devotionalReminders: devotionalReminders ?? this.devotionalReminders,
+        subscriptionUpdates: subscriptionUpdates ?? this.subscriptionUpdates,
+        readingPlanReminders: readingPlanReminders ?? this.readingPlanReminders,
+        reminderTime: reminderTime ?? this.reminderTime,
+        timezone: timezone ?? this.timezone,
       );
 
   Map<String, dynamic> toJson() => {
@@ -76,6 +120,9 @@ class NotificationPreferences {
         'sermon_processing': sermonProcessing,
         'devotional_reminders': devotionalReminders,
         'subscription_updates': subscriptionUpdates,
+        'reading_plan_reminders': readingPlanReminders,
+        'reminder_time': reminderTime,
+        if (timezone != null) 'timezone': timezone,
       };
 }
 
@@ -281,11 +328,13 @@ class ReadingPlan {
       required this.title,
       required this.description,
       required this.days,
+      this.completeCanon = false,
       this.enrollmentId,
       this.completedDayIds = const []});
   final int id;
   final String title, description;
   final List<dynamic> days;
+  final bool completeCanon;
   final int? enrollmentId;
   final List<int> completedDayIds;
   factory ReadingPlan.fromJson(Map<String, dynamic> j) => ReadingPlan(
@@ -293,9 +342,50 @@ class ReadingPlan {
       title: textValue(j['title']),
       description: textValue(j['description']),
       days: listValue(j['days']),
+      completeCanon: j['complete_canon'] as bool? ?? false,
       enrollmentId: (j['enrollment'] as Map?)?['id'] as int?,
-      completedDayIds: ((j['enrollment'] as Map?)?['completed_day_ids'] as List?)
-              ?.whereType<int>()
-              .toList() ??
-          const []);
+      completedDayIds:
+          ((j['enrollment'] as Map?)?['completed_day_ids'] as List?)
+                  ?.whereType<int>()
+                  .toList() ??
+              const []);
+}
+
+class ReadingAssignment {
+  const ReadingAssignment({
+    required this.reference,
+    this.translation = 'WEB',
+    this.book,
+    this.chapter,
+  });
+  final String reference;
+  final String translation;
+  final String? book;
+  final int? chapter;
+
+  factory ReadingAssignment.fromJson(dynamic value) {
+    if (value is String) return ReadingAssignment(reference: value);
+    final json = value is Map
+        ? value.cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final reference =
+        textValue(json['reference'] ?? json['scripture_reference']);
+    final book = textValue(json['book'] ?? json['book_name']);
+    final chapter = intValue(json['chapter'] ?? json['chapter_start'], -1);
+    final start = intValue(json['verse_start'], -1);
+    final end = intValue(json['verse_end'], -1);
+    final derived = [
+      if (book.isNotEmpty) book,
+      if (chapter >= 0) '$chapter${start >= 0 ? ':$start' : ''}',
+      if (end > start && start >= 0) '-$end',
+    ].join(' ');
+    return ReadingAssignment(
+      reference: reference.isNotEmpty ? reference : derived,
+      translation: textValue(json['translation']).isEmpty
+          ? 'WEB'
+          : textValue(json['translation']),
+      book: book.isEmpty ? null : book,
+      chapter: chapter < 0 ? null : chapter,
+    );
+  }
 }

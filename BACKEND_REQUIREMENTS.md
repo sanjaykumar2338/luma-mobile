@@ -102,6 +102,18 @@ privacy policy and terms of service before store review.
 
 ## Client feedback follow-up contracts
 
+The finalized backend contract adds these fields consumed by the mobile client:
+
+- `GET|PUT /mobile/notification-preferences`: `reading_plan_reminders`,
+  `reminder_time` (`HH:MM`), and IANA `timezone`, in addition to the existing
+  switches. Saving preferences does not imply FCM/APNs delivery.
+- `GET /reading-plans`: plan-level `complete_canon` and day-level `readings`
+  assignments. The complete-canon 30-day plan must cover all 66 books and
+  1,189 chapters exactly once while preserving existing enrollments.
+- `GET /entitlements`: membership `source` (`stripe`, `mobile_purchase`,
+  `manual`, or null) and `canceled`; future cancellation dates must preserve
+  valid paid access until expiration.
+
 The mobile client accepts `Nehemiah 1`, `Nehemiah 1:1`, and `Nehemiah 1:1-3`
 and sends a structured `reader_reference`. The Laravel validator and study
 generator must accept `translation`, `book`, `chapter`, and optional
