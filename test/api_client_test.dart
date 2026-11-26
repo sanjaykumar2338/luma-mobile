@@ -6,6 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luma_mobile/core/api_client.dart';
 
 void main() {
+  test('parses Bible chapters, verses, ranges, and books with spaces', () {
+    expect(parseBibleReaderReference('Nehemiah 1'), {
+      'translation': 'WEB',
+      'book': 'Nehemiah',
+      'chapter': 1,
+    });
+    expect(parseBibleReaderReference('KJV: 1 Corinthians 13:4-7'), {
+      'translation': 'KJV',
+      'book': '1 Corinthians',
+      'chapter': 13,
+      'verse_start': 4,
+      'verse_end': 7,
+    });
+  });
   test('decodes a successful API envelope and forwards query parameters',
       () async {
     Uri? requested;

@@ -42,6 +42,13 @@ String prettyStatus(String value) => value
         part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}')
     .join(' ');
 
+String membershipLabel(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty || normalized == 'free') return 'Free';
+  if (normalized == 'premium') return 'Premium';
+  return prettyStatus(value);
+}
+
 String usageSummary(Map<String, dynamic> usage) {
   const labels = {
     'sermon_processing': 'Sermons',
@@ -659,7 +666,7 @@ class _DashboardState extends State<Dashboard> {
           ),
         ));
     return PageFrame(
-      title: 'Good day, $firstName',
+      title: 'Hello, $firstName',
       action: IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
       onRefresh: load,
       child: busy
@@ -714,14 +721,14 @@ class _DashboardState extends State<Dashboard> {
                                         const Text('Membership',
                                             style: TextStyle(
                                                 fontWeight: FontWeight.w700)),
-                                        Text(prettyStatus(entitlements
-                                                ?.membership.plan ??
-                                            'free'))
+                          Text(membershipLabel(entitlements
+                                                  ?.membership.plan ??
+                                              'free'))
                                       ]),
-                                  Text(entitlements?.membership.status ??
-                                      'Status unavailable'),
+                                  Text(membershipLabel(entitlements?.membership.status ??
+                                      'Status unavailable')),
                                   const SizedBox(height: 14),
-                                  const Text('AI usage',
+                                  const Text('Monthly usage',
                                       style: TextStyle(
                                           fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 8),
@@ -1133,6 +1140,26 @@ class _SermonDetailState extends State<SermonDetail> {
   String? askError;
   String? lastQuestion;
 
+  Future<void> createDevotional() async {
+    setState(() => busy = true);
+    try {
+      final response = await widget.api.request('/sermons/${sermon.id}/devotional',
+          method: 'POST', auth: true);
+      final data = dataOf(response);
+      if (data is! Map) {
+        throw const ApiException('The devotional response was invalid.');
+      }
+      if (!mounted) return;
+      await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => DevotionalDetail(
+              devotional: Devotional.fromJson(data.cast<String, dynamic>()))));
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1385,6 +1412,13 @@ class _SermonDetailState extends State<SermonDetail> {
               padding: const EdgeInsets.all(20),
               children: [
                 Chip(label: Text(prettyStatus(sermon.status))),
+                if (sermon.status.toLowerCase() == 'completed') ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                      onPressed: busy ? null : createDevotional,
+                      icon: const Icon(Icons.wb_sunny_outlined),
+                      label: const Text('Create Devotional')),
+                ],
                 if (sermon.error != null)
                   Text(sermon.error!,
                       style: const TextStyle(color: Colors.red)),
@@ -1471,6 +1505,7 @@ class _BibleReaderState extends State<BibleReader> {
   int chapter = 1;
   BiblePassage? passage;
   String? loadError;
+  bool searching = false;
   final search = TextEditingController();
   @override
   void initState() {
@@ -1542,16 +1577,26 @@ class _BibleReaderState extends State<BibleReader> {
 
   Future<void> searchBible() async {
     if (search.text.trim().isEmpty) return;
+    setState(() => searching = true);
     try {
       final response = await widget.api.request('/bible/search',
           auth: true,
           query: {'translation': translation, 'q': search.text.trim()});
       if (!mounted) return;
+      final results = mapsOf(response);
+      if (results.isEmpty) {
+        showModalBottomSheet(
+            context: context,
+            builder: (_) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: EmptyState(title: 'No results', message: 'Try another Scripture search.')));
+        return;
+      }
       showModalBottomSheet(
           context: context,
           builder: (_) => ListView(
               padding: const EdgeInsets.all(20),
-              children: mapsOf(response)
+              children: results
                   .map((item) => ListTile(
                       title: Text('${item['reference'] ?? ''}'),
                       subtitle: Text('${item['text'] ?? ''}'),
@@ -1585,10 +1630,11 @@ class _BibleReaderState extends State<BibleReader> {
                   .toList()));
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => searching = false);
     }
   }
 
-  @override
   @override
   Widget build(BuildContext context) => PageFrame(
         title: 'Bible reader',
@@ -1694,8 +1740,8 @@ class _BibleReaderState extends State<BibleReader> {
                     controller: search,
                     decoration: InputDecoration(
                         labelText: 'Search Scripture',
-                        suffixIcon: IconButton(
-                            onPressed: searchBible,
+                         suffixIcon: IconButton(
+                             onPressed: searching ? null : searchBible,
                             icon: const Icon(Icons.search)))),
                 if (passage != null) ...[
                   const SizedBox(height: 24),
@@ -1765,6 +1811,11 @@ class _StudyHubState extends State<StudyHub> {
   }
 
   Future<void> generate() async {
+    if (parseBibleReaderReference(passage.text.trim()) == null) {
+      setState(() => generationError =
+          'Enter a valid reference such as Nehemiah 1, Nehemiah 1:1, or Nehemiah 1:1-3.');
+      return;
+    }
     setState(() {
       generating = true;
       generationError = null;
@@ -1790,7 +1841,6 @@ class _StudyHubState extends State<StudyHub> {
     } on ApiException catch (error) {
       if (mounted) {
         setState(() => generationError = error.message);
-        showError(context, error);
       }
     } finally {
       if (mounted) setState(() => generating = false);
@@ -1799,7 +1849,7 @@ class _StudyHubState extends State<StudyHub> {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-      title: 'AI Bible study',
+        title: 'Bible Study',
       onRefresh: load,
       child: busy
           ? const Loading()
@@ -1849,7 +1899,7 @@ class _StudyHubState extends State<StudyHub> {
                             ]))),
               FilledButton.icon(
                   onPressed: generating ? null : generate,
-                  icon: const Icon(Icons.auto_awesome),
+                  icon: const Icon(Icons.menu_book_outlined),
                   label: Text(generating ? 'Generating...' : 'Generate study')),
               const SizedBox(height: 28),
               const Text('Saved studies',
@@ -1889,7 +1939,7 @@ class MoreHub extends StatelessWidget {
   final ApiClient api;
   @override
   Widget build(BuildContext context) => PageFrame(
-      title: 'Your rhythm',
+       title: 'More',
       child: Column(children: [
         ListTile(
             leading: const Icon(Icons.wb_sunny_outlined),
@@ -2298,7 +2348,7 @@ class _MembershipScreenState extends State<MembershipScreen> {
                     padding: const EdgeInsets.all(20),
                     children: [
                       Text(
-                          'Current plan: ${entitlements?.membership.plan ?? 'free'} · ${entitlements?.membership.status ?? 'unknown'}',
+                          'Current plan: ${membershipLabel(entitlements?.membership.plan ?? 'free')} · ${membershipLabel(entitlements?.membership.status ?? 'unknown')}',
                           style: const TextStyle(
                               fontSize: 20, fontWeight: FontWeight.w700)),
                       if (entitlements?.membership.endsAt != null)
@@ -2312,13 +2362,13 @@ class _MembershipScreenState extends State<MembershipScreen> {
                       const Text('Free',
                           style: TextStyle(
                               fontSize: 22, fontWeight: FontWeight.w700)),
-                      const Text('Core Bible reading and limited AI features.'),
+                      const Text('Core Bible reading and limited advanced features.'),
                       const SizedBox(height: 18),
                       const Text('Premium',
                           style: TextStyle(
                               fontSize: 22, fontWeight: FontWeight.w700)),
                       const Text(
-                          'Higher AI limits, sermon processing, Ask LUMA, and deeper study tools.'),
+                          'Higher limits, sermon processing, Ask LUMA, and deeper study tools.'),
                       const SizedBox(height: 18),
                       if (subscriptions.products.isEmpty)
                         Card(
@@ -2556,7 +2606,7 @@ class _AccountSettingsState extends State<AccountSettings> {
             leading: Icon(Icons.stars_outlined),
             title: Text('Membership and usage'),
             subtitle: Text(
-                '${entitlements?.membership.plan ?? 'Free'} · ${entitlements?.membership.status ?? 'unknown'}'),
+                '${membershipLabel(entitlements?.membership.plan ?? 'free')} · ${membershipLabel(entitlements?.membership.status ?? 'unknown')}'),
             trailing: IconButton(
                 tooltip: 'Refresh membership',
                 onPressed: loadAccountData,

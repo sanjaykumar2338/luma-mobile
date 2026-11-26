@@ -14,6 +14,23 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+Map<String, dynamic>? parseBibleReaderReference(String value,
+    {String translation = 'WEB'}) {
+  final match = RegExp(
+          r'^(?:(WEB|KJV|ASV)\s*:\s*)?(.+?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$')
+      .firstMatch(value.trim());
+  if (match == null) return null;
+  final start = match.group(4);
+  final end = match.group(5);
+  return {
+    'translation': match.group(1) ?? translation,
+    'book': match.group(2)!.trim(),
+    'chapter': int.parse(match.group(3)!),
+    if (start != null) 'verse_start': int.parse(start),
+    if (end != null) 'verse_end': int.parse(end),
+  };
+}
+
 class ApiClient {
   ApiClient({FlutterSecureStorage? storage, http.Client? client})
       : _storage = storage ?? const FlutterSecureStorage(),
@@ -76,13 +93,9 @@ class ApiClient {
       body = {...body};
       final reference = body['reader_reference'];
       if (reference is String) {
-        final match = RegExp(r'^(.+?)\s+(\d+)').firstMatch(reference.trim());
-        if (match != null) {
-          body['reader_reference'] = {
-            'translation': 'WEB',
-            'book': match.group(1),
-            'chapter': int.parse(match.group(2)!)
-          };
+        final parsed = parseBibleReaderReference(reference);
+        if (parsed != null) {
+          body['reader_reference'] = parsed;
         } else {
           body.remove('reader_reference');
         }
