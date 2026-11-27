@@ -28,3 +28,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo-mark.png
+  fonts:
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/InstrumentSans[wght].ttf

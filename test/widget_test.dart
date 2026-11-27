@@ -47,4 +47,29 @@ void main() {
     expect(find.byType(LumaDarkCard), findsOneWidget);
     expect(find.byType(LumaAccentButton), findsOneWidget);
   });
+
+  testWidgets('study segmented navigation exposes all three client sections',
+      (tester) async {
+    var selected = 0;
+    await tester.pumpWidget(MaterialApp(
+        theme: lumaTheme(),
+        home: Scaffold(
+            body: LumaStudySegmented(
+                selected: selected, onChanged: (value) => selected = value))));
+
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Scripture'), findsOneWidget);
+    expect(find.text('Reflect'), findsOneWidget);
+    await tester.tap(find.text('Reflect'));
+    expect(selected, 2);
+  });
+
+  test('processing labels only use backend states', () {
+    expect(sermonProcessingLabel('awaiting_captions'), 'Awaiting transcript');
+    expect(
+        sermonProcessingLabel('retrieving_transcript'), 'Retrieving content');
+    expect(sermonProcessingLabel('transcribing'), 'Transcribing');
+    expect(sermonProcessingLabel('processing'), 'Processing');
+    expect(sermonProcessingLabel('failed'), 'Failed');
+  });
 }

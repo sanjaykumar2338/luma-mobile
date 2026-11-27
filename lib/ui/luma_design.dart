@@ -67,6 +67,7 @@ class _LumaMarkPainter extends CustomPainter {
 
 ThemeData lumaTheme() => ThemeData(
       useMaterial3: true,
+      fontFamily: 'Instrument Sans',
       scaffoldBackgroundColor: lumaCream,
       colorScheme: ColorScheme.fromSeed(
         seedColor: lumaLime,
@@ -296,6 +297,86 @@ class LumaIconButton extends StatelessWidget {
             minimumSize: const Size(44, 44),
           ),
           icon: Icon(icon, size: 22),
+        ),
+      );
+}
+
+class LumaStudySegmented extends StatelessWidget {
+  const LumaStudySegmented(
+      {required this.selected, required this.onChanged, super.key});
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 46,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: lumaSurface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: lumaLine),
+        ),
+        child: Row(
+          children:
+              ['Notes', 'Scripture', 'Reflect'].asMap().entries.map((entry) {
+            final active = entry.key == selected;
+            return Expanded(
+              child: Semantics(
+                button: true,
+                selected: active,
+                label: '${entry.value} tab',
+                child: InkWell(
+                  onTap: () => onChanged(entry.key),
+                  borderRadius: BorderRadius.circular(20),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: active ? lumaInk : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      entry.value,
+                      style: TextStyle(
+                        color: active ? lumaSurface : lumaMuted,
+                        fontSize: 14,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+}
+
+class LumaFooterCta extends StatelessWidget {
+  const LumaFooterCta(
+      {required this.label,
+      required this.onPressed,
+      super.key,
+      this.accent = false});
+  final String label;
+  final VoidCallback? onPressed;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 18, bottom: 8),
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            backgroundColor: accent ? lumaLime : lumaInk,
+            foregroundColor: accent ? lumaInk : lumaSurface,
+            minimumSize: const Size.fromHeight(58),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(label),
+            const SizedBox(width: 10),
+            const Icon(Icons.arrow_forward, size: 22),
+          ]),
         ),
       );
 }

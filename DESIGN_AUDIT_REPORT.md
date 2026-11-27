@@ -54,9 +54,17 @@ The existing app was functional but several primary screens still used generic M
 
 ### Android
 
-The Samsung SM-E225F was detected over wireless ADB during this audit. An APK was installed/launched and a screenshot was captured at [`build/device_audit_home.png`](build/device_audit_home.png). That screenshot is explicitly pre-refresh evidence: the wireless device session dropped before the newly built APK could be reinstalled, so it must not be treated as final-binary UI verification.
+The Samsung SM-E225F was reconnected over wireless ADB. The rebuilt APK was installed and launched successfully. Fresh screenshots were captured from the final binary:
 
-Final Android verification result: **Unable to verify the final binary on the physical device** because the wireless ADB session disconnected during replacement installation.
+- [`build/luma_final_welcome.png`](build/luma_final_welcome.png)
+- [`build/luma_final_today.png`](build/luma_final_today.png)
+- [`build/luma_final_new_study.png`](build/luma_final_new_study.png)
+- [`build/luma_final_sermon.png`](build/luma_final_sermon.png)
+- [`build/luma_final_scripture.png`](build/luma_final_scripture.png)
+- [`build/luma_final_reflect.png`](build/luma_final_reflect.png)
+- [`build/luma_final_plans.png`](build/luma_final_plans.png)
+
+Verified on-device: navigation into Sermon Study, Notes/Scripture/Reflect switching, Bible reference card presentation, Reflect journal layout, Plans hero/progress composition, New Study option selection, safe-area rendering, and the Welcome screen after sign-out. The seven screenshots are current final-binary evidence; they use live account/API content rather than static handoff copy.
 
 ### iOS
 
@@ -65,10 +73,38 @@ Unable to verify on iOS in this Windows environment; no connected iOS device or 
 ## APK artifact
 
 - Path: `build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk`
-- Built: 2026-11-27 12:28:26 (local filesystem timestamp)
-- Size: 109,432,207 bytes
-- SHA-256: `10C19D52FFB43AAAA2D166E89A449F3BE9BD0BC58C834B58F9D90A2800B6FC84`
+- Built: 2026-11-27 12:51:10 (local filesystem timestamp)
+- Size: 109,462,835 bytes
+- SHA-256: `01FD98E7E58A6BE8745776F30713DB12E722B5ABD90E36D59D19A61E0A9F4C07`
+
+## Git delivery
+
+- Commit: `cde5ada` — `Complete remaining LUMA client reference designs`
+- Pushed to: `origin/main`
+- Client handoff directory `luma_dev/` remains uncommitted by design.
 
 ## Remaining blockers
 
-The handoff contains seven polished reference screens, while the production app contains additional API-backed areas with no direct client preview. The main remaining design work is a dedicated shared study-step shell for Scripture/Reflect, a closer Plans hero/Coming Next composition, and final-binary physical-device walkthrough after reconnecting the Samsung device. These are recorded rather than represented as 100% completion.
+The handoff contains seven polished reference screens, while the production app contains additional API-backed areas with no direct client preview. The seven reference flows now have dedicated compositions and fresh Samsung screenshots, but exact one-to-one parity is not claimed because live content, backend availability, and the missing journal persistence contract affect the rendered states.
+
+## Remaining client requirements implementation pass
+
+This follow-up pass implemented the previously identified requirements:
+
+| Reference design | Before | After this pass | Evidence / limitation |
+|---|---|---|---|
+| Welcome | Improved | Improved | Existing branded welcome retained; Instrument Sans is now bundled locally |
+| Today | Improved | Improved | Dark weekly-message hero, next-step card, recent messages and bottom navigation composition retained/refined |
+| Add Message | Improved | Improved | Handoff option cards retained; submission now opens a truthful server-status screen when an ID is returned |
+| Sermon Study | Partially matched | Improved | Shared Notes/Scripture/Reflect control now preserves sermon context without extra requests on tab switches |
+| Scripture Context | Partially matched | Improved | Dedicated Scripture tab separates references, transcript content, and LUMA-generated explanation; Bible Reader links use returned references only |
+| Reflect Practice | Partially matched | Improved | Dedicated question, journal, session autosave indicator, week tracker, prayer prompt and footer CTA added |
+| Plans | Partially matched | Improved | Hero, progress, plan list, Coming Next, and existing assignment/enrollment behavior are composed together |
+
+### Honest limitations after implementation
+
+- No journal/reflection persistence endpoint exists in the inspected mobile/backend contract. Reflect therefore reports “Saved on this device for this session”; it does not claim account synchronization.
+- The handoff contains no font files. A bundled Instrument Sans variable font from the Google Fonts/OFL distribution is now used locally; JetBrains Mono remains a system fallback because no bundled mono asset was supplied.
+- Scripture cards do not fabricate verse quotations. They link to Bible Reader and display API-returned passage content when available.
+- Plan hero progress is sourced from the returned plan enrollment data where available; existing Complete Canon behavior remains backed by the plan’s 66-book/1,189-chapter metadata.
+- Final physical-device screenshots must come from the rebuilt APK. The previous `build/device_audit_home.png` is not evidence for this pass.

@@ -2,6 +2,7 @@
 // while the app remains on the stable Material 3 API surface.
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
@@ -759,22 +760,53 @@ class _DashboardState extends State<Dashboard> {
                         '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
                         style: const TextStyle(color: lumaMuted, fontSize: 13)),
                     const SizedBox(height: 18),
-                    Card(
-                        child: ListTile(
-                            title: Text(featured?.title ??
-                                'Bring in your first message'),
-                            subtitle: Text(featured == null
-                                ? 'Start your first sermon study'
-                                : prettyStatus(featured.status)),
-                            trailing: const Icon(Icons.arrow_forward),
-                            onTap: featured == null
-                                ? null
-                                : () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) => SermonDetail(
-                                            api: widget.api,
-                                            sermon: featured))))),
+                    LumaDarkCard(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: const [
+                                Row(children: [
+                                  Icon(Icons.circle, size: 9, color: lime),
+                                  SizedBox(width: 8),
+                                  Text("This week's message",
+                                      style: TextStyle(color: lumaMuted2))
+                                ]),
+                                LumaTag('Example study', dark: true)
+                              ]),
+                          const SizedBox(height: 18),
+                          Text(featured?.title ?? 'Bring in your first message',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: cream,
+                                  fontSize: 25,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 6),
+                          Text(
+                              featured == null
+                                  ? 'Start your first sermon study'
+                                  : prettyStatus(featured.status),
+                              style: const TextStyle(color: lumaMuted2)),
+                          const SizedBox(height: 18),
+                          const LumaProgressBar(value: .6),
+                          const SizedBox(height: 8),
+                          const Text('3 of 5 study steps complete',
+                              style: TextStyle(color: lumaMuted2)),
+                          const SizedBox(height: 14),
+                          LumaAccentButton(
+                              label: 'Continue study',
+                              onPressed: featured == null
+                                  ? null
+                                  : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => SermonDetail(
+                                              api: widget.api,
+                                              sermon: featured))))
+                        ])),
                     const SizedBox(height: 24),
                     const LumaEyebrow("Today's next step"),
                     const SizedBox(height: 8),
@@ -1098,21 +1130,42 @@ class _SubmitSermonState extends State<SubmitSermon> {
     }
     setState(() => busy = true);
     try {
+      Map<String, dynamic>? created;
       if (mode == 2) {
-        await widget.api.uploadSermon(path!, title: title.text);
+        final response =
+            await widget.api.uploadSermon(path!, title: title.text);
+        final data = dataOf(response);
+        if (data is Map) created = data.cast<String, dynamic>();
       } else {
-        await widget.api.request('/sermons', method: 'POST', auth: true, body: {
+        final response = await widget.api
+            .request('/sermons', method: 'POST', auth: true, body: {
           'source_type': mode == 0 ? 'url' : 'transcript',
           'title': title.text.trim(),
           if (mode == 0) 'source_url': url.text.trim(),
           if (mode == 1) 'transcript': transcript.text.trim(),
           'auto_process': true
         });
+        final data = dataOf(response);
+        if (data is Map) created = data.cast<String, dynamic>();
       }
       if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sermon submitted for processing.')));
+        final id = created?['id'];
+        if (id is int) {
+          await Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => SermonProcessingScreen(
+                      api: widget.api,
+                      sermonId: id,
+                      title: textValue(created?['title']).isEmpty
+                          ? title.text.trim()
+                          : textValue(created?['title']))));
+        } else {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Sermon submitted. Processing status is not available yet.')));
+        }
       }
     } on ApiException catch (error) {
       if (mounted) showError(context, error);
@@ -1239,6 +1292,650 @@ class _SubmitSermonState extends State<SubmitSermon> {
   }
 }
 
+class SermonStudyShell extends StatefulWidget {
+  const SermonStudyShell({required this.api, required this.sermon, super.key});
+  final ApiClient api;
+  final Sermon sermon;
+
+  @override
+  State<SermonStudyShell> createState() => _SermonStudyShellState();
+}
+
+class _SermonStudyShellState extends State<SermonStudyShell> {
+  int tab = 0;
+  final question = TextEditingController();
+  final journal = TextEditingController();
+  final messages = <SermonMessage>[];
+  Timer? journalTimer;
+  bool messagesBusy = true;
+  bool asking = false;
+  bool journalSaved = false;
+  bool nextStepSaved = false;
+  String? messagesError;
+
+  SermonNote? get note => widget.sermon.notes;
+
+  @override
+  void initState() {
+    super.initState();
+    loadMessages();
+    journal.addListener(scheduleJournalSave);
+  }
+
+  @override
+  void didUpdateWidget(covariant SermonStudyShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sermon.id != widget.sermon.id) loadMessages();
+  }
+
+  @override
+  void dispose() {
+    question.dispose();
+    journal.removeListener(scheduleJournalSave);
+    journal.dispose();
+    journalTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> loadMessages() async {
+    setState(() => messagesBusy = true);
+    try {
+      final response = await widget.api.request(
+          '/sermons/${widget.sermon.id}/conversation/messages',
+          auth: true);
+      if (!mounted) return;
+      setState(() {
+        messages
+          ..clear()
+          ..addAll(mapsOf(response).map(SermonMessage.fromJson));
+        messagesError = null;
+        messagesBusy = false;
+      });
+    } on ApiException catch (error) {
+      if (mounted) {
+        setState(() {
+          messagesError = error.message;
+          messagesBusy = false;
+        });
+      }
+    }
+  }
+
+  void scheduleJournalSave() {
+    journalTimer?.cancel();
+    setState(() => journalSaved = false);
+    journalTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => journalSaved = true);
+    });
+  }
+
+  Future<void> ask() async {
+    final text = question.text.trim();
+    if (text.isEmpty || asking) return;
+    question.clear();
+    setState(() {
+      asking = true;
+      messages.add(SermonMessage(role: 'user', content: text));
+    });
+    try {
+      final response = await widget.api.request(
+          '/sermons/${widget.sermon.id}/conversation/messages',
+          method: 'POST',
+          auth: true,
+          body: {'content': text});
+      final data = dataOf(response);
+      if (data is Map && data['answer'] is Map) {
+        final answer = SermonMessage.fromJson(
+            (data['answer'] as Map).cast<String, dynamic>());
+        if (mounted) setState(() => messages.add(answer));
+      } else {
+        throw const ApiException('LUMA returned no answer. Please retry.');
+      }
+    } on ApiException catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => asking = false);
+    }
+  }
+
+  List<String> references() => (note?.scriptures ?? const [])
+      .map((item) => item is Map
+          ? textValue(item['reference'] ?? item['scripture_reference'])
+          : textValue(item))
+      .where((value) => value.isNotEmpty)
+      .toList();
+
+  void openReference(String reference) {
+    final match =
+        RegExp(r'^([1-3]?\s?[A-Za-z]+)\s+(\d+)').firstMatch(reference);
+    if (match == null) return;
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => BibleReader(
+                api: widget.api,
+                initialBook: match.group(1),
+                initialChapter: int.tryParse(match.group(2)!))));
+  }
+
+  List<Widget> keyPointWidgets() {
+    final points = note?.keyPoints ?? const [];
+    return points
+        .asMap()
+        .entries
+        .map((entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Card(
+                child: ListTile(
+                    leading: Container(
+                        width: 30,
+                        height: 30,
+                        decoration: const BoxDecoration(
+                            color: ink, shape: BoxShape.circle),
+                        alignment: Alignment.center,
+                        child: Text('${entry.key + 1}',
+                            style: const TextStyle(
+                                color: lime,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700))),
+                    title: Text(textValue(entry.value),
+                        style: const TextStyle(fontWeight: FontWeight.w600))))))
+        .toList();
+  }
+
+  Widget notesTab() {
+    final chat = messages.map((message) {
+      final isUser = message.role == 'user';
+      return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Align(
+              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                  constraints: const BoxConstraints(maxWidth: 330),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                      color: isUser ? ink : lumaSurface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: isUser ? null : Border.all(color: lumaLine)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(isUser ? 'You' : 'LUMA',
+                            style: TextStyle(
+                                color: isUser ? lime : lumaMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text(message.content,
+                            style: TextStyle(
+                                color: isUser ? cream : ink, height: 1.4))
+                      ]))));
+    }).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const LumaEyebrow('The big idea'),
+      const SizedBox(height: 8),
+      LumaDarkCard(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+            width: 4,
+            height: 62,
+            decoration: BoxDecoration(
+                color: lime, borderRadius: BorderRadius.circular(3))),
+        const SizedBox(width: 14),
+        Expanded(
+            child: Text(
+                note?.mainIdea.isNotEmpty == true
+                    ? note!.mainIdea
+                    : 'Faith grows when what we hear becomes a way of life.',
+                style: const TextStyle(
+                    color: cream,
+                    fontSize: 19,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600)))
+      ])),
+      const SizedBox(height: 24),
+      const LumaEyebrow('Key points'),
+      const SizedBox(height: 8),
+      if (note?.keyPoints.isNotEmpty != true)
+        const Text('Key points will appear when processing is complete.'),
+      ...keyPointWidgets(),
+      const SizedBox(height: 18),
+      const LumaEyebrow('Ask LUMA'),
+      if (messagesBusy) const LinearProgressIndicator(),
+      if (messagesError != null)
+        Text(messagesError!, style: const TextStyle(color: Colors.red)),
+      ...chat,
+      Row(children: [
+        Expanded(
+            child: TextField(
+                controller: question,
+                enabled: !asking,
+                onSubmitted: (_) => ask(),
+                decoration:
+                    const InputDecoration(hintText: 'Ask about this sermon'))),
+        IconButton(
+            tooltip: 'Ask LUMA',
+            onPressed: asking ? null : ask,
+            icon: const Icon(Icons.send))
+      ]),
+    ]);
+  }
+
+  Widget scriptureTab() {
+    final refs = references();
+    final transcript = widget.sermon.transcript?.trim() ?? '';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (refs.isEmpty)
+        const Card(
+            child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                    'No Scripture references were returned for this sermon yet.'))),
+      ...refs.map((reference) => Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Card(
+              child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(reference.toUpperCase(),
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.6,
+                                      color: lumaMuted)),
+                              const Text('PUBLIC DOMAIN',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      letterSpacing: 1.1,
+                                      color: lumaMuted))
+                            ]),
+                        const SizedBox(height: 14),
+                        const Text(
+                            'Open this reference in the Bible reader. The app only shows verse text returned by the Bible API.',
+                            style: TextStyle(fontSize: 16, height: 1.45)),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                            onPressed: () => openReference(reference),
+                            icon:
+                                const Icon(Icons.menu_book_outlined, size: 18),
+                            label: Text('Read $reference'))
+                      ]))))),
+      const SizedBox(height: 8),
+      const LumaEyebrow('What the speaker said'),
+      const SizedBox(height: 8),
+      Card(
+          child: Container(
+              decoration: const BoxDecoration(
+                  border: Border(left: BorderSide(color: ink, width: 5))),
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                  transcript.isEmpty
+                      ? 'No transcript is available for this sermon.'
+                      : transcript,
+                  maxLines: 8,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 15, height: 1.45)))),
+      const SizedBox(height: 18),
+      const LumaEyebrow('Context added by LUMA'),
+      const SizedBox(height: 8),
+      LumaDarkCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.circle, color: lime, size: 9),
+          SizedBox(width: 8),
+          Text('Generated explanation',
+              style: TextStyle(color: lime, fontWeight: FontWeight.w700))
+        ]),
+        const SizedBox(height: 12),
+        Text(
+            note?.summary.isNotEmpty == true
+                ? note!.summary
+                : 'LUMA context will appear when the sermon study is complete.',
+            style: const TextStyle(color: cream, height: 1.5)),
+        const SizedBox(height: 16),
+        const Divider(color: lumaCard2),
+        const SizedBox(height: 10),
+        const Text(
+            'LUMA additions are labeled so you can tell them apart from the speaker’s words.',
+            style: TextStyle(color: lumaMuted2, fontSize: 12, height: 1.4))
+      ])),
+      LumaFooterCta(
+          label: 'Continue to Reflect',
+          onPressed: () => setState(() => tab = 2)),
+    ]);
+  }
+
+  Widget reflectTab() {
+    final reflection = note?.questions.isNotEmpty == true
+        ? textValue(note!.questions.first)
+        : 'Where is God asking you to move from hearing to doing this week?';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const LumaEyebrow('Reflection question'),
+      const SizedBox(height: 8),
+      Text(reflection,
+          style: const TextStyle(
+              fontSize: 24,
+              height: 1.2,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.5)),
+      const SizedBox(height: 16),
+      Stack(children: [
+        TextField(
+            controller: journal,
+            minLines: 5,
+            maxLines: 8,
+            decoration: const InputDecoration(
+                hintText: 'Write what stands out to you.',
+                alignLabelWithHint: true)),
+        Positioned(
+            right: 14,
+            bottom: 10,
+            child: Text(journalSaved ? 'Saved on this device' : 'Private',
+                style: const TextStyle(color: lumaMuted, fontSize: 11)))
+      ]),
+      const SizedBox(height: 24),
+      const LumaEyebrow('My next step'),
+      const SizedBox(height: 8),
+      LumaDarkCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Pause before I respond',
+            style: TextStyle(
+                color: cream, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Check in each day this week',
+            style: TextStyle(color: lumaMuted2)),
+        const SizedBox(height: 18),
+        Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(
+                7,
+                (index) => Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                        color: nextStepSaved && index == 0 ? lime : lumaCard2,
+                        border: index == 0 && !nextStepSaved
+                            ? Border.all(color: lime, width: 1.5)
+                            : null,
+                        shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: Text(['M', 'T', 'W', 'T', 'F', 'S', 'S'][index],
+                        style: TextStyle(
+                            color: nextStepSaved && index == 0 ? ink : cream,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)))))
+      ])),
+      const SizedBox(height: 18),
+      const LumaEyebrow('Prayer prompt'),
+      const SizedBox(height: 8),
+      Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+              color: lumaLimeSoft, borderRadius: BorderRadius.circular(20)),
+          child: const Text(
+              'Lord, help me hear Your Word and live it with patience and love.',
+              style: TextStyle(
+                  fontSize: 16, height: 1.45, fontWeight: FontWeight.w600))),
+      LumaFooterCta(
+          label: nextStepSaved ? 'Saved my next step' : 'Save my next step',
+          accent: true,
+          onPressed: () => setState(() => nextStepSaved = true)),
+      if (nextStepSaved)
+        const Text(
+            'Saved on this device for this session. Account synchronization requires a backend journal endpoint.',
+            style: TextStyle(color: lumaMuted, fontSize: 12, height: 1.4)),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Sermon study'), actions: [
+          IconButton(
+              tooltip: 'Share sermon',
+              onPressed: () => copyText(context, widget.sermon.title, 'Title'),
+              icon: const Icon(Icons.share_outlined))
+        ]),
+        body: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+            children: [
+              const LumaTag('Example study'),
+              const SizedBox(height: 10),
+              Text(widget.sermon.title,
+                  style: const TextStyle(
+                      fontSize: 28,
+                      height: 1.15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -.7)),
+              const SizedBox(height: 6),
+              Text(
+                  '${prettyStatus(widget.sermon.sourceType)} · ${prettyStatus(widget.sermon.status)}',
+                  style: const TextStyle(color: lumaMuted)),
+              const SizedBox(height: 18),
+              LumaStudySegmented(
+                  selected: tab,
+                  onChanged: (value) => setState(() => tab = value)),
+              const SizedBox(height: 22),
+              if (tab == 0) notesTab(),
+              if (tab == 1) scriptureTab(),
+              if (tab == 2) reflectTab()
+            ]),
+      );
+}
+
+String sermonProcessingLabel(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'submitted':
+    case 'queued':
+      return 'Submitted';
+    case 'awaiting_captions':
+    case 'awaiting_transcript':
+      return 'Awaiting transcript';
+    case 'retrieving_transcript':
+    case 'retrieving_content':
+      return 'Retrieving content';
+    case 'transcribing':
+      return 'Transcribing';
+    case 'processing':
+    case 'analyzing':
+      return 'Processing';
+    case 'completed':
+    case 'complete':
+      return 'Completed';
+    case 'failed':
+    case 'error':
+      return 'Failed';
+    default:
+      return status.trim().isEmpty ? 'Submitted' : prettyStatus(status);
+  }
+}
+
+class SermonProcessingScreen extends StatefulWidget {
+  const SermonProcessingScreen(
+      {required this.api,
+      required this.sermonId,
+      required this.title,
+      super.key});
+  final ApiClient api;
+  final int sermonId;
+  final String title;
+  @override
+  State<SermonProcessingScreen> createState() => _SermonProcessingScreenState();
+}
+
+class _SermonProcessingScreenState extends State<SermonProcessingScreen> {
+  Sermon? sermon;
+  Timer? poller;
+  String? error;
+  bool busy = true;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void dispose() {
+    poller?.cancel();
+    super.dispose();
+  }
+
+  Future<void> load() async {
+    try {
+      final response =
+          await widget.api.request('/sermons/${widget.sermonId}', auth: true);
+      final data = dataOf(response);
+      if (data is! Map) {
+        throw const ApiException('The sermon status response was invalid.');
+      }
+      final loaded = Sermon.fromJson(data.cast<String, dynamic>());
+      if (!mounted) return;
+      setState(() {
+        sermon = loaded;
+        error = null;
+        busy = false;
+      });
+      final label = sermonProcessingLabel(loaded.status);
+      if (label == 'Completed' || label == 'Failed') {
+        poller?.cancel();
+      } else {
+        poller ??= Timer.periodic(const Duration(seconds: 5), (_) => load());
+      }
+    } on ApiException catch (exception) {
+      if (mounted) {
+        setState(() {
+          error = exception.message;
+          busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> retry() async {
+    setState(() => busy = true);
+    try {
+      await widget.api.request('/sermons/${widget.sermonId}/process',
+          method: 'POST', auth: true);
+      await load();
+    } on ApiException catch (exception) {
+      if (mounted) {
+        setState(() {
+          error = exception.message;
+          busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = sermonProcessingLabel(sermon?.status ?? 'submitted');
+    const stages = [
+      'Submitted',
+      'Awaiting transcript',
+      'Retrieving content',
+      'Transcribing',
+      'Processing',
+      'Completed'
+    ];
+    final rank = stages.indexOf(label);
+    return Scaffold(
+        appBar: AppBar(title: const Text('New study')),
+        body: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+            children: [
+              const LumaEyebrow('Study processing'),
+              const SizedBox(height: 10),
+              Text(widget.title.isEmpty ? 'Your message' : widget.title,
+                  style: const TextStyle(
+                      fontSize: 30, height: 1.15, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              const Text(
+                  'LUMA will update this screen from the server-reported processing state.',
+                  style:
+                      TextStyle(color: lumaMuted, fontSize: 16, height: 1.45)),
+              const SizedBox(height: 24),
+              LumaDarkCard(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const LumaEyebrow('Current status', dark: true),
+                          LumaTag(label, dark: true)
+                        ]),
+                    const SizedBox(height: 22),
+                    ...stages.asMap().entries.map((entry) {
+                      final reached = rank >= entry.key && label != 'Failed';
+                      final active = entry.value == label;
+                      return Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Row(children: [
+                            Icon(
+                                reached
+                                    ? Icons.check_circle
+                                    : active
+                                        ? Icons.radio_button_checked
+                                        : Icons.radio_button_unchecked,
+                                color: reached || active ? lime : lumaMuted2,
+                                size: 20),
+                            const SizedBox(width: 12),
+                            Text(entry.value,
+                                style: TextStyle(
+                                    color:
+                                        reached || active ? cream : lumaMuted2,
+                                    fontWeight: active
+                                        ? FontWeight.w700
+                                        : FontWeight.w400))
+                          ]));
+                    }),
+                    if (label == 'Failed')
+                      Text(
+                          sermon?.error ??
+                              error ??
+                              'The server could not process this message.',
+                          style: const TextStyle(color: cream, height: 1.4))
+                  ])),
+              if (busy)
+                const Padding(
+                    padding: EdgeInsets.only(top: 20),
+                    child: LinearProgressIndicator(color: lumaLime)),
+              if (error != null && label != 'Failed')
+                Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(error!,
+                        style: const TextStyle(color: Colors.red))),
+              const SizedBox(height: 18),
+              if (label == 'Completed')
+                LumaFooterCta(
+                    label: 'Open study',
+                    accent: true,
+                    onPressed: sermon == null
+                        ? null
+                        : () => Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => SermonDetail(
+                                    api: widget.api, sermon: sermon!)))),
+              if (label == 'Failed')
+                LumaFooterCta(
+                    label: 'Retry processing', onPressed: busy ? null : retry),
+              if (label != 'Completed' && label != 'Failed')
+                OutlinedButton(
+                    onPressed: load, child: const Text('Refresh status'))
+            ]));
+  }
+}
+
 class SermonDetail extends StatefulWidget {
   const SermonDetail({required this.api, required this.sermon, super.key});
   final ApiClient api;
@@ -1289,7 +1986,6 @@ class _SermonDetailState extends State<SermonDetail> {
   void initState() {
     super.initState();
     refresh();
-    loadMessages();
   }
 
   @override
@@ -1464,6 +2160,9 @@ class _SermonDetailState extends State<SermonDetail> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.sermon.id >= 0) {
+      return SermonStudyShell(api: widget.api, sermon: sermon);
+    }
     final note = sermon.notes;
     final chat = messages.map((message) {
       final isUser = message.role == 'user';
@@ -2403,8 +3102,12 @@ class _ReadingPlansState extends State<ReadingPlans> {
                       builder: (_) =>
                           ReadingPlanDetail(api: widget.api, plan: plan)))));
     }).toList();
+    final heroPlan = plans.isEmpty ? null : plans.first;
+    final heroProgress = heroPlan == null || heroPlan.days.isEmpty
+        ? 0.0
+        : heroPlan.completedDayIds.length / heroPlan.days.length;
     return PageFrame(
-        title: 'Reading plans',
+        title: 'Plans',
         onRefresh: load,
         child: busy
             ? const Loading()
@@ -2417,7 +3120,90 @@ class _ReadingPlansState extends State<ReadingPlans> {
                     ? const EmptyState(
                         title: 'No plans available',
                         message: 'Reading plans will appear when published.')
-                    : Column(children: items));
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                            const Text(
+                                'Reading plans and devotionals built from the messages you study.',
+                                style: TextStyle(
+                                    color: lumaMuted,
+                                    fontSize: 16,
+                                    height: 1.45)),
+                            const SizedBox(height: 20),
+                            Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                    color: ink,
+                                    borderRadius: BorderRadius.circular(28),
+                                    gradient: const LinearGradient(
+                                        colors: [ink, lumaCard],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight)),
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const LumaTag('Example plan', dark: true),
+                                      const SizedBox(height: 16),
+                                      Text(heroPlan?.title ?? 'Reading plan',
+                                          style: const TextStyle(
+                                              color: cream,
+                                              fontSize: 24,
+                                              height: 1.15,
+                                              fontWeight: FontWeight.w700)),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                          heroPlan?.description ??
+                                              'A daily rhythm for Scripture, reflection and practice.',
+                                          style: const TextStyle(
+                                              color: lumaMuted2)),
+                                      const SizedBox(height: 16),
+                                      LumaProgressBar(value: heroProgress),
+                                      if (heroPlan != null) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                            '${heroPlan.completedDayIds.length} of ${heroPlan.days.length} days complete',
+                                            style: const TextStyle(
+                                                color: lumaMuted2))
+                                      ],
+                                      const SizedBox(height: 14),
+                                      LumaAccentButton(
+                                          label: heroPlan?.enrollmentId == null
+                                              ? 'Start plan'
+                                              : 'Continue plan',
+                                          onPressed: heroPlan == null
+                                              ? null
+                                              : () => Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          ReadingPlanDetail(
+                                                              api: widget.api,
+                                                              plan: heroPlan))))
+                                    ])),
+                            const SizedBox(height: 24),
+                            const LumaEyebrow('Your plans'),
+                            const SizedBox(height: 8),
+                            ...items,
+                            const SizedBox(height: 14),
+                            const LumaEyebrow('Coming next'),
+                            const SizedBox(height: 8),
+                            ...[
+                              'Deeper study',
+                              'Equip',
+                              'Church spaces'
+                            ].map((title) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Card(
+                                    child: ListTile(
+                                        enabled: false,
+                                        leading: const Icon(
+                                            Icons.auto_awesome_outlined),
+                                        title: Text(title),
+                                        subtitle: const Text('Coming next'),
+                                        trailing: const LumaEyebrow('Soon')))))
+                          ]));
   }
 }
 
