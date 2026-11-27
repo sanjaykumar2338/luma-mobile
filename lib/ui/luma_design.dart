@@ -95,6 +95,34 @@ ThemeData lumaTheme() => ThemeData(
           letterSpacing: -0.6,
         ),
       ),
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(
+            color: lumaInk,
+            fontSize: 44,
+            height: 48 / 44,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -1.6),
+        headlineLarge: TextStyle(
+            color: lumaInk,
+            fontSize: 30,
+            height: 36 / 30,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.8),
+        headlineMedium: TextStyle(
+            color: lumaInk,
+            fontSize: 26,
+            height: 32 / 26,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.6),
+        titleMedium: TextStyle(
+            color: lumaInk,
+            fontSize: 16,
+            height: 22 / 16,
+            fontWeight: FontWeight.w600),
+        bodyLarge: TextStyle(color: lumaMuted, fontSize: 17, height: 26 / 17),
+        bodyMedium: TextStyle(color: lumaMuted, fontSize: 15, height: 22 / 15),
+        bodySmall: TextStyle(color: lumaMuted, fontSize: 13, height: 19 / 13),
+      ),
       cardTheme: CardThemeData(
         color: lumaSurface,
         surfaceTintColor: Colors.transparent,
@@ -149,6 +177,12 @@ ThemeData lumaTheme() => ThemeData(
         labelTextStyle: WidgetStatePropertyAll(
           TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         ),
+      ),
+      dividerTheme: const DividerThemeData(color: lumaLine, thickness: 1),
+      listTileTheme: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        minVerticalPadding: 8,
+        iconColor: lumaMuted,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
@@ -234,6 +268,34 @@ class LumaAccentButton extends StatelessWidget {
             const SizedBox(width: 10),
             const Icon(Icons.arrow_forward, size: 22),
           ],
+        ),
+      );
+}
+
+class LumaIconButton extends StatelessWidget {
+  const LumaIconButton(
+      {required this.icon,
+      required this.label,
+      required this.onPressed,
+      super.key});
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: label,
+        child: IconButton(
+          tooltip: label,
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            backgroundColor: lumaSurface,
+            foregroundColor: lumaInk,
+            side: const BorderSide(color: lumaLine),
+            minimumSize: const Size(44, 44),
+          ),
+          icon: Icon(icon, size: 22),
         ),
       );
 }

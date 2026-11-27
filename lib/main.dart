@@ -588,14 +588,18 @@ class PageFrame extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
             title: Text(title,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+                style: const TextStyle(
+                    fontSize: 26,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.6)),
             actions: action == null ? null : [action!]),
         body: SafeArea(
             child: RefreshIndicator(
                 onRefresh: onRefresh ?? () async {},
                 child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
                     child: child))),
       );
 }
@@ -704,23 +708,42 @@ class _DashboardState extends State<Dashboard> {
   @override
   Widget build(BuildContext context) {
     final firstName = widget.auth.user?.name.split(' ').first ?? 'friend';
-    final recent = sermons.map((sermon) => Card(
-          child: ListTile(
-            title: Text(sermon.title),
-            subtitle: Text(prettyStatus(sermon.status)),
-            leading: const CircleAvatar(
-                backgroundColor: lime,
-                child: Icon(Icons.graphic_eq, color: ink)),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) =>
-                        SermonDetail(api: widget.api, sermon: sermon))),
+    final featured = sermons.isNotEmpty ? sermons.first : null;
+    final recent = sermons.skip(1).map((sermon) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Card(
+            child: ListTile(
+              leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                      color: ink, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.play_arrow, color: lime)),
+              title: Text(sermon.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text(
+                  '${prettyStatus(sermon.sourceType)} · ${prettyStatus(sermon.status)}'),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          SermonDetail(api: widget.api, sermon: sermon))),
+            ),
           ),
         ));
+    final recentContent = sermons.length > 1
+        ? Column(children: recent.toList())
+        : const EmptyState(
+            title: 'Your library is ready',
+            message: 'Submit a sermon to begin your study library.');
     return PageFrame(
-      title: 'Hello, $firstName',
-      action: IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+      title: 'Good morning, $firstName',
+      action: const LumaIconButton(
+          icon: Icons.notifications_none,
+          label: 'Notifications',
+          onPressed: null),
       onRefresh: load,
       child: busy
           ? const Loading()
@@ -732,116 +755,59 @@ class _DashboardState extends State<Dashboard> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    LumaDarkCard(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: const [
-                                  Row(children: [
-                                    Icon(Icons.circle, size: 10, color: lime),
-                                    SizedBox(width: 8),
-                                    Text('Today\'s next step',
-                                        style: TextStyle(color: lumaMuted2))
-                                  ]),
-                                  LumaTag('Reflection', dark: true)
-                                ]),
-                            const SizedBox(height: 22),
-                            Text(
-                                devotional?.title ??
-                                    'Start with a moment of reflection.',
-                                style: const TextStyle(
-                                    color: cream,
-                                    fontSize: 27,
-                                    height: 1.15,
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Text(
-                                devotional?.reference ??
-                                    'Daily Scripture and thoughtful tools are ready for you.',
-                                style: const TextStyle(color: lumaMuted2)),
-                            const SizedBox(height: 18),
-                            const LumaProgressBar(value: .6),
-                            const SizedBox(height: 8),
-                            const Text('3 of 5 study steps complete',
-                                style: TextStyle(color: lumaMuted2)),
-                            const SizedBox(height: 14),
-                            LumaAccentButton(
-                              label: 'Continue study',
-                              onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          Devotionals(api: widget.api))),
-                            ),
-                          ]),
-                    ),
-                    const SizedBox(height: 20),
+                    Text(
+                        '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+                        style: const TextStyle(color: lumaMuted, fontSize: 13)),
+                    const SizedBox(height: 18),
                     Card(
-                        child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const LumaEyebrow('Membership'),
-                                        Text(
-                                            membershipLabel(
-                                                entitlements?.membership.plan ??
-                                                    'free'),
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w700))
-                                      ]),
-                                  Text(membershipLabel(
-                                      entitlements?.membership.status ??
-                                          'Status unavailable')),
-                                  const SizedBox(height: 14),
-                                  const Text('Monthly usage',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 8),
-                                  UsageOverview(
-                                      usage: entitlements?.usage ?? const {})
-                                ]))),
+                        child: ListTile(
+                            title: Text(featured?.title ??
+                                'Bring in your first message'),
+                            subtitle: Text(featured == null
+                                ? 'Start your first sermon study'
+                                : prettyStatus(featured.status)),
+                            trailing: const Icon(Icons.arrow_forward),
+                            onTap: featured == null
+                                ? null
+                                : () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) => SermonDetail(
+                                            api: widget.api,
+                                            sermon: featured))))),
                     const SizedBox(height: 24),
-                    Row(children: [
-                      Expanded(
-                          child: OutlinedButton.icon(
-                              onPressed: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          StudyHub(api: widget.api))),
-                              icon: const Icon(Icons.auto_awesome_outlined),
-                              label: const Text('Bible Study'))),
-                      const SizedBox(width: 10),
-                      Expanded(
-                          child: OutlinedButton.icon(
+                    const LumaEyebrow("Today's next step"),
+                    const SizedBox(height: 8),
+                    Card(
+                        child: ListTile(
+                            leading: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                    color: lumaLimeSoft,
+                                    borderRadius: BorderRadius.circular(14)),
+                                child: const Icon(Icons.auto_awesome_outlined,
+                                    color: ink)),
+                            title: Text(
+                                devotional?.title ?? 'Pause before you answer',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text(devotional?.reference ??
+                                'Take one practical step from what you heard.'))),
+                    const SizedBox(height: 24),
+                    Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const LumaEyebrow('Recent messages'),
+                          TextButton(
                               onPressed: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                       builder: (_) =>
                                           SermonLibrary(api: widget.api))),
-                              icon: const Icon(Icons.library_music_outlined),
-                              label: const Text('Sermons')))
-                    ]),
-                    const SizedBox(height: 24),
-                    const Text('Recent sermons',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
-                    if (sermons.isEmpty)
-                      const EmptyState(
-                          title: 'Your library is ready',
-                          message:
-                              'Submit a sermon to begin your study library.')
-                    else
-                      ...recent,
+                              child: const Text('See all'))
+                        ]),
+                    recentContent,
                   ],
                 ),
     );
@@ -1120,6 +1086,11 @@ class _SubmitSermonState extends State<SubmitSermon> {
   }
 
   Future<void> submit() async {
+    if ((mode == 0 && url.text.trim().isEmpty) ||
+        (mode == 1 && transcript.text.trim().isEmpty)) {
+      showError(context, const ApiException('Add a link or transcript first.'));
+      return;
+    }
     if (mode == 2 && path == null) {
       showError(
           context, const ApiException('Choose an audio or video file first.'));
@@ -1152,49 +1123,120 @@ class _SubmitSermonState extends State<SubmitSermon> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-      appBar: AppBar(title: const Text('Submit a sermon')),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
-        const Text('Bring a message into your study library.',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 20),
-        SegmentedButton<int>(segments: const [
-          ButtonSegment(value: 0, label: Text('Link')),
-          ButtonSegment(value: 1, label: Text('Transcript')),
-          ButtonSegment(value: 2, label: Text('File'))
-        ], selected: {
-          mode
-        }, onSelectionChanged: (value) => setState(() => mode = value.first)),
-        const SizedBox(height: 16),
-        TextField(
-            controller: title,
-            decoration: const InputDecoration(labelText: 'Title (optional)')),
-        const SizedBox(height: 12),
-        if (mode == 0)
-          TextField(
-              controller: url,
-              decoration:
-                  const InputDecoration(labelText: 'Video or sermon URL'))
-        else if (mode == 1)
-          TextField(
-              controller: transcript,
-              minLines: 10,
-              maxLines: 18,
-              decoration: const InputDecoration(labelText: 'Paste transcript'))
-        else
-          OutlinedButton.icon(
-              onPressed: busy ? null : pickFile,
-              icon: const Icon(Icons.attach_file),
-              label: Text(fileName ?? 'Choose audio or video')),
-        if (mode == 2)
-          const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                  'Accepted: FLAC, MP3, MP4, MPEG, MPGA, M4A, OGG, WAV, WEBM. Maximum 25 MB.')),
-        const SizedBox(height: 20),
-        FilledButton(
-            onPressed: busy ? null : submit,
-            child: Text(busy ? 'Submitting...' : 'Submit sermon'))
-      ]));
+      appBar: AppBar(title: const Text('New study')),
+      body: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+          children: [
+            const Text('Bring in a message.',
+                style: TextStyle(
+                    fontSize: 30,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.8)),
+            const SizedBox(height: 8),
+            const Text(
+                'Choose how you want to add the sermon or teaching you heard.'),
+            const SizedBox(height: 22),
+            _captureOption(0, Icons.link, 'Paste a link',
+                'YouTube, podcast, or church site'),
+            const SizedBox(height: 10),
+            _captureOption(2, Icons.mic_none, 'Upload audio or video',
+                'Recordings you have permission to use'),
+            const SizedBox(height: 10),
+            _captureOption(1, Icons.description_outlined, 'Paste a transcript',
+                'Text from a sermon or teaching'),
+            const SizedBox(height: 10),
+            Opacity(
+                opacity: .65,
+                child: Card(
+                    child: ListTile(
+                        leading: const Icon(Icons.edit_outlined),
+                        title: const Text('Start from my notes',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        trailing: const LumaEyebrow('Soon')))),
+            const SizedBox(height: 16),
+            TextField(
+                controller: title,
+                decoration:
+                    const InputDecoration(labelText: 'Title (optional)')),
+            const SizedBox(height: 12),
+            if (mode == 0)
+              TextField(
+                  controller: url,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.link), hintText: 'https://...'))
+            else if (mode == 1)
+              TextField(
+                  controller: transcript,
+                  onChanged: (_) => setState(() {}),
+                  minLines: 8,
+                  maxLines: 14,
+                  decoration: const InputDecoration(
+                      hintText: 'Paste the transcript here'))
+            else
+              OutlinedButton.icon(
+                  onPressed: busy ? null : pickFile,
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(fileName ?? 'Choose audio or video')),
+            const SizedBox(height: 8),
+            const Text('Only add media you own or have permission to use.',
+                style: TextStyle(color: lumaMuted, fontSize: 12)),
+            const SizedBox(height: 20),
+            FilledButton(
+                onPressed: busy ||
+                        ((mode == 0 && url.text.trim().isEmpty) ||
+                            (mode == 1 && transcript.text.trim().isEmpty) ||
+                            (mode == 2 && path == null))
+                    ? null
+                    : submit,
+                child: Text(busy ? 'Creating study...' : 'Create study  →'))
+          ]));
+
+  Widget _captureOption(
+      int value, IconData icon, String title, String subtitle) {
+    final selected = mode == value;
+    return InkWell(
+      onTap: busy ? null : () => setState(() => mode = value),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: lumaSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: selected ? ink : lumaLine, width: selected ? 2 : 1)),
+        child: Row(children: [
+          Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                  color: selected ? ink : cream,
+                  borderRadius: BorderRadius.circular(14)),
+              child: Icon(icon, color: selected ? lime : ink)),
+          const SizedBox(width: 14),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    style: const TextStyle(color: lumaMuted, fontSize: 12))
+              ])),
+          if (selected)
+            Container(
+                width: 22,
+                height: 22,
+                decoration:
+                    const BoxDecoration(color: lime, shape: BoxShape.circle),
+                child: const Icon(Icons.check, size: 15))
+        ]),
+      ),
+    );
+  }
 }
 
 class SermonDetail extends StatefulWidget {
@@ -1491,28 +1533,79 @@ class _SermonDetailState extends State<SermonDetail> {
       body: busy
           ? const Loading()
           : ListView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
               children: [
-                Chip(label: Text(prettyStatus(sermon.status))),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const LumaTag('Example study'),
+                      IconButton(
+                          tooltip: 'Share sermon',
+                          onPressed: () =>
+                              copyText(context, sermon.title, 'Title'),
+                          icon: const Icon(Icons.share_outlined))
+                    ]),
+                Text(sermon.title,
+                    style: const TextStyle(
+                        fontSize: 28,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -.7)),
+                const SizedBox(height: 6),
+                Text(
+                    '${prettyStatus(sermon.sourceType)} · ${prettyStatus(sermon.status)}',
+                    style: const TextStyle(color: lumaMuted)),
                 if (sermon.status.toLowerCase() == 'completed') ...[
-                  const SizedBox(height: 10),
-                  FilledButton.icon(
-                      onPressed: busy ? null : createDevotional,
-                      icon: const Icon(Icons.wb_sunny_outlined),
-                      label: const Text('Create Devotional')),
+                  const SizedBox(height: 16),
+                  LumaDarkCard(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        const LumaEyebrow('The big idea', dark: true),
+                        const SizedBox(height: 14),
+                        Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                  width: 4,
+                                  height: 58,
+                                  decoration: BoxDecoration(
+                                      color: lime,
+                                      borderRadius: BorderRadius.circular(3))),
+                              const SizedBox(width: 14),
+                              const Expanded(
+                                  child: Text(
+                                      'Faith grows past the moment of listening when we put what we hear into practice.',
+                                      style: TextStyle(
+                                          color: cream,
+                                          fontSize: 19,
+                                          height: 1.35,
+                                          fontWeight: FontWeight.w600)))
+                            ])
+                      ])),
+                  const SizedBox(height: 12),
+                  LumaAccentButton(
+                      label:
+                          busy ? 'Creating devotional...' : 'Create devotional',
+                      onPressed: busy ? null : createDevotional),
                 ],
                 if (sermon.error != null)
                   Text(sermon.error!,
                       style: const TextStyle(color: Colors.red)),
-                const Text('Summary and main idea',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 18),
+                const LumaEyebrow('Notes'),
                 const SizedBox(height: 8),
                 if (note == null ||
                     (note.summary.isEmpty && note.mainIdea.isEmpty))
                   const Text('No generated notes are available yet.')
                 else ...[
-                  if (note.summary.isNotEmpty) Text(note.summary),
+                  if (note.summary.isNotEmpty)
+                    Card(
+                        child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(note.summary,
+                                style: const TextStyle(
+                                    fontSize: 16, height: 1.5)))),
                   if (note.mainIdea.isNotEmpty)
                     Text('Main idea: ${note.mainIdea}'),
                 ],
@@ -1524,9 +1617,7 @@ class _SermonDetailState extends State<SermonDetail> {
                   ...note.keyPoints.map((point) => Text('• $point')),
                 ],
                 const SizedBox(height: 24),
-                const Text('Transcript',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                const LumaEyebrow('Transcript'),
                 const SizedBox(height: 8),
                 if (sermon.transcript?.isNotEmpty != true)
                   const Text('No transcript is available for this sermon.')
