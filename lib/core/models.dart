@@ -74,6 +74,8 @@ class NotificationPreferences {
     this.devotionalReminders = true,
     this.subscriptionUpdates = true,
     this.readingPlanReminders = true,
+    this.sermonCompanionReminders = true,
+    this.sermonCompanionMidweekCheckIns = true,
     this.reminderTime = '08:00',
     this.timezone,
   });
@@ -82,6 +84,8 @@ class NotificationPreferences {
   final bool devotionalReminders;
   final bool subscriptionUpdates;
   final bool readingPlanReminders;
+  final bool sermonCompanionReminders;
+  final bool sermonCompanionMidweekCheckIns;
   final String reminderTime;
   final String? timezone;
 
@@ -92,6 +96,8 @@ class NotificationPreferences {
         devotionalReminders: json['devotional_reminders'] as bool? ?? true,
         subscriptionUpdates: json['subscription_updates'] as bool? ?? true,
         readingPlanReminders: json['reading_plan_reminders'] as bool? ?? true,
+        sermonCompanionReminders: json['sermon_companion_reminders'] as bool? ?? true,
+        sermonCompanionMidweekCheckIns: json['sermon_companion_midweek_check_ins'] as bool? ?? true,
         reminderTime: json['reminder_time']?.toString() ?? '08:00',
         timezone: json['timezone']?.toString(),
       );
@@ -102,6 +108,8 @@ class NotificationPreferences {
     bool? devotionalReminders,
     bool? subscriptionUpdates,
     bool? readingPlanReminders,
+    bool? sermonCompanionReminders,
+    bool? sermonCompanionMidweekCheckIns,
     String? reminderTime,
     String? timezone,
   }) =>
@@ -111,6 +119,8 @@ class NotificationPreferences {
         devotionalReminders: devotionalReminders ?? this.devotionalReminders,
         subscriptionUpdates: subscriptionUpdates ?? this.subscriptionUpdates,
         readingPlanReminders: readingPlanReminders ?? this.readingPlanReminders,
+        sermonCompanionReminders: sermonCompanionReminders ?? this.sermonCompanionReminders,
+        sermonCompanionMidweekCheckIns: sermonCompanionMidweekCheckIns ?? this.sermonCompanionMidweekCheckIns,
         reminderTime: reminderTime ?? this.reminderTime,
         timezone: timezone ?? this.timezone,
       );
@@ -121,6 +131,8 @@ class NotificationPreferences {
         'devotional_reminders': devotionalReminders,
         'subscription_updates': subscriptionUpdates,
         'reading_plan_reminders': readingPlanReminders,
+        'sermon_companion_reminders': sermonCompanionReminders,
+        'sermon_companion_midweek_check_ins': sermonCompanionMidweekCheckIns,
         'reminder_time': reminderTime,
         if (timezone != null) 'timezone': timezone,
       };

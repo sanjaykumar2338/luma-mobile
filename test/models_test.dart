@@ -134,6 +134,8 @@ void main() {
       'devotional_reminders': true,
       'subscription_updates': false,
       'reading_plan_reminders': true,
+      'sermon_companion_reminders': true,
+      'sermon_companion_midweek_check_ins': true,
       'reminder_time': '07:30',
       'timezone': 'Asia/Kolkata',
     });
@@ -144,6 +146,8 @@ void main() {
       'devotional_reminders': true,
       'subscription_updates': false,
       'reading_plan_reminders': true,
+      'sermon_companion_reminders': true,
+      'sermon_companion_midweek_check_ins': true,
       'reminder_time': '07:30',
       'timezone': 'Asia/Kolkata',
     });

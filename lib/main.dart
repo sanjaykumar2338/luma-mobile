@@ -18,6 +18,7 @@ import 'core/models.dart';
 import 'core/push_notifications.dart';
 import 'core/subscriptions.dart';
 import 'ui/luma_design.dart';
+import 'ui/sermon_companion.dart';
 
 const ink = lumaInk;
 const cream = lumaCream;
@@ -2888,6 +2889,12 @@ class MoreHub extends StatelessWidget {
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => ReadingPlans(api: api)))),
         ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Sermon Companion'),
+            subtitle: const Text('Capture, reflect and remember Sunday'),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => SermonCompanionHub(api: api)))),
+        ListTile(
             leading: const Icon(Icons.person_outline),
             title: const Text('Account and settings'),
             onTap: () => Navigator.push(
@@ -3783,6 +3790,20 @@ class _AccountSettingsState extends State<AccountSettings> {
             onChanged: notifications.enabled
                 ? (value) => setState(() => notifications =
                     notifications.copyWith(readingPlanReminders: value))
+                : null),
+        SwitchListTile(
+            title: const Text('Sermon Companion reminders'),
+            value: notifications.sermonCompanionReminders,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications = notifications
+                    .copyWith(sermonCompanionReminders: value))
+                : null),
+        SwitchListTile(
+            title: const Text('Sermon Companion midweek check-ins'),
+            value: notifications.sermonCompanionMidweekCheckIns,
+            onChanged: notifications.enabled
+                ? (value) => setState(() => notifications = notifications
+                    .copyWith(sermonCompanionMidweekCheckIns: value))
                 : null),
         SwitchListTile(
             title: const Text('Subscription updates'),

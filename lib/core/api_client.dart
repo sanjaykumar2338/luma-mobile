@@ -69,6 +69,26 @@ class ApiClient {
         : <String, dynamic>{'data': payload};
   }
 
+  Future<Map<String, dynamic>> uploadSermonCompanionAttachment(
+      {required int companionId,
+      required String filePath,
+      required String kind}) async {
+    final request = http.MultipartRequest('POST', Uri.parse('${AppConfig.apiBaseUrl}/sermon-companions/$companionId/attachments'));
+    request.headers['Accept'] = 'application/json';
+    final token = await _storage.read(key: 'luma_access_token');
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+    request.fields['kind'] = kind;
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    final response = await request.send().timeout(const Duration(seconds: 90));
+    final body = await response.stream.bytesToString();
+    dynamic payload = body.isEmpty ? <String, dynamic>{} : jsonDecode(body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final map = payload is Map ? payload.cast<String, dynamic>() : <String, dynamic>{};
+      throw ApiException(map['message'] as String? ?? 'Attachment upload failed. Please try again.', statusCode: response.statusCode, fields: (map['errors'] as Map?)?.cast<String, dynamic>() ?? {});
+    }
+    return payload is Map ? payload.cast<String, dynamic>() : <String, dynamic>{'data': payload};
+  }
+
   Future<dynamic> requestAny(String path,
       {String method = 'GET',
       Map<String, dynamic>? body,

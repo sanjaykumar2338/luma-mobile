@@ -24,6 +24,12 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>LUMA uses the camera to privately capture handwritten sermon notes.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LUMA uses the microphone to record a sermon for private transcription.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LUMA uses your photo library to privately upload sermon notes.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

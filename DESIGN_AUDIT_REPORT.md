@@ -108,3 +108,29 @@ This follow-up pass implemented the previously identified requirements:
 - Scripture cards do not fabricate verse quotations. They link to Bible Reader and display API-returned passage content when available.
 - Plan hero progress is sourced from the returned plan enrollment data where available; existing Complete Canon behavior remains backed by the plan’s 66-book/1,189-chapter metadata.
 - Final physical-device screenshots must come from the rebuilt APK. The previous `build/device_audit_home.png` is not evidence for this pass.
+
+## Sermon Companion implementation pass — 2026-11-27
+
+The mobile implementation now consumes the deployed Laravel contract documented in `SERMON_COMPANION_IMPLEMENTATION.md` without changing the backend. It adds:
+
+- A More/You entry point and companion list with private write-note capture.
+- Camera and multi-image gallery selection, multipart attachment upload, and extraction-status presentation through the attachment resource.
+- Local audio recording with microphone permission checks, pause/resume/stop, and existing audio-file selection. YouTube remains reference-only; no download or scraping is performed.
+- Companion editing with confirmed/corrected notes.
+- Queued Sunday-in-One-Page recap and five/seven-day devotional-plan requests using backend status values rather than invented progress.
+- Plan-day content, completion actions, stable-key journal autosave/restore, memory-card practice, and the two Sermon Companion notification preferences.
+- Android and iOS permission declarations for camera, microphone, and photo-library access.
+
+### Companion verification status
+
+- `flutter analyze`: passed with only the project-wide Flutter Material deprecation notice.
+- `flutter test`: passed, 24 tests including companion resource parsing, stable journal keys, and notification preference round-trip coverage.
+- `flutter build apk --debug --target-platform android-arm64 --split-per-abi`: passed.
+- `adb devices -l` currently reports no connected Samsung SM-E225F, so this pass has no fresh physical-device companion screenshots or permission/upload evidence. The existing seven-design screenshots above predate this feature and are not evidence for it.
+- iOS could not be physically verified from this Windows environment.
+
+### Known contract limitations
+
+- The backend memory-card practice endpoint accepts only `completed`; it does not expose answer submission/validation, so the mobile client does not claim server-validated fill-in-the-blank answers.
+- Queued recap, extraction, transcription, and devotional generation are shown from backend status/resources; provider-side AI/transcription delivery was not available for physical verification.
+- Push delivery remains dependent on configured FCM/APNs providers; saving notification preferences is implemented, delivery is not claimed as verified.
